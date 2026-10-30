@@ -1,0 +1,21 @@
+name: Check Windows package
+on: [push, pull_request, workflow_dispatch]
+permissions:
+  contents: read
+jobs:
+  windows:
+    runs-on: windows-latest
+    strategy:
+      matrix:
+        python: ['3.11', '3.14']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - run: python -m pip install -r requirements.txt
+      - run: python -m unittest discover -v
+      - run: python rhythm_app.py --self-test --data-dir "$env:RUNNER_TEMP/rhythm-ui"
+      - run: python rhythm_app.py --settings-test --data-dir "$env:RUNNER_TEMP/rhythm-settings"
+      - run: powershell -NoProfile -STA -ExecutionPolicy Bypass -File connections.ps1 -ValidateOnly -DataRoot "$env:RUNNER_TEMP/rhythm-settings"
+      - run: python build_release.py
