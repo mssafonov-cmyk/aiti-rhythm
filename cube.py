@@ -61,7 +61,13 @@ class Cube:
                 'Content-Type: '+('image/gif' if blink else 'image/jpeg')+'\r\n\r\n').encode() + content + f'\r\n--{boundary}--\r\n'.encode()
         digest = hashlib.sha256(content).hexdigest()
         if self.uploaded.get(filename) != digest:
+            space = json.loads(self.request('/space.json'))
+            if space.get('free', 0) < len(content) + 20000:
+                raise RuntimeError('Not enough cube space; existing images preserved')
             self.request('/doUpload?dir=%2Fimage%2F', body, {'Content-Type': 'multipart/form-data; boundary=' + boundary})
+            received = self.request('/image/' + filename)
+            if received != content:
+                raise RuntimeError('Cube image upload verification failed')
             self.uploaded[filename] = digest
         if not self.prepared:
             self.request('/set?autoplay=0')

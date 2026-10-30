@@ -170,6 +170,37 @@ class CollectorTests(unittest.TestCase):
 
 
 class CubeTests(unittest.TestCase):
+    @staticmethod
+    def device_reply(files, path, data=None):
+        if path == '/v.json':
+            return b'{"m":"HelloCubic-Lite"}'
+        if path == '/space.json':
+            return b'{"free":1000000}'
+        if path.startswith('/doUpload'):
+            files['image'] = data.split(b'\r\n\r\n', 1)[1].rsplit(b'\r\n--', 1)[0]
+        if path.startswith('/image/'):
+            return files['image']
+        return b'OK'
+
+    def test_full_storage_and_empty_upload_are_not_reported_or_selected_as_success(self):
+        for free in (0, 1000000):
+            cube = Cube()
+            requests = []
+            def request(path, data=None, headers=None):
+                requests.append(path)
+                if path == '/v.json':
+                    return b'{"m":"HelloCubic-Lite"}'
+                if path == '/space.json':
+                    return json.dumps({'free': free}).encode()
+                return b''
+            with patch.object(cube, 'request', side_effect=request):
+                with self.assertRaises(RuntimeError):
+                    cube.update(dict(DEFAULTS['cube'], enabled=True, host='192.168.50.7'), {}, 100)
+            self.assertFalse(cube.uploaded)
+            self.assertFalse(any(path.startswith('/set?img=') for path in requests))
+            if not free:
+                self.assertFalse(any(path.startswith('/doUpload') for path in requests))
+
     def test_restored_calendar_respects_title_permission_without_mutating_snapshot(self):
         from datetime import timedelta
         from cube_art import Canvas
@@ -188,9 +219,10 @@ class CubeTests(unittest.TestCase):
         cube = Cube()
         config = dict(DEFAULTS['cube'], enabled=True, host='192.168.50.7')
         requests = []
+        files = {}
         def request(path, data=None, headers=None):
             requests.append((path, data))
-            return b'{"m":"HelloCubic-Lite"}' if path == '/v.json' else b'OK'
+            return self.device_reply(files, path, data)
         with patch.object(cube, 'request', side_effect=request):
             result = cube.update(config, {}, 100)
             cube.update(config, {}, 101)
@@ -203,9 +235,10 @@ class CubeTests(unittest.TestCase):
         cube = Cube()
         config = dict(DEFAULTS['cube'], enabled=True, host='192.168.50.7')
         requests = []
+        files = {}
         def request(path, data=None, headers=None):
             requests.append(path)
-            return b'{"m":"HelloCubic-Lite"}' if path == '/v.json' else b'OK'
+            return self.device_reply(files, path, data)
         with patch.object(cube, 'request', side_effect=request):
             for now in (100, 131, 162, 193):
                 cube.update(config, {}, now)
