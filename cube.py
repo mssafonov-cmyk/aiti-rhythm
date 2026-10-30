@@ -93,70 +93,32 @@ def urgent_meeting(snapshot):
 def encode(image, blink=False):
     from PIL import Image, ImageDraw
     if not blink:
-        result = io.BytesIO(); image.save(result, format='JPEG', quality=85)
+        result = io.BytesIO(); image.save(result, format='JPEG', quality=88, optimize=True)
         return result.getvalue(), '.jpg'
     frames = []
-    for color in ('#79521D', '#FFD34D', '#79521D', '#FFD34D'):
-        frame = image.copy(); ImageDraw.Draw(frame).rectangle((0, 0, 239, 239), outline=color, width=10)
-        frames.append(frame.convert('P'))
+    for strength in (0, 80, 170, 255, 170, 80):
+        frame = image.convert('RGB').copy()
+        overlay = frame.copy()
+        ImageDraw.Draw(overlay).rectangle((0, 0, 239, 239), outline='#FFD43B', width=16)
+        frames.append(Image.blend(frame, overlay, strength / 255))
+    palette = frames[3].quantize(colors=128)
+    frames = [frame.quantize(palette=palette, dither=Image.Dither.NONE) for frame in frames]
     result = io.BytesIO()
-    frames[0].save(result, format='GIF', save_all=True, append_images=frames[1:], duration=600, loop=0)
+    frames[0].save(result, format='GIF', save_all=True, append_images=frames[1:],
+                   duration=[600, 200, 200, 600, 200, 200], loop=0, optimize=True, disposal=1)
     return result.getvalue(), '.gif'
 
 
 def render(snapshot, config, frame=0):
-    from PIL import Image, ImageDraw, ImageFont
-    image = Image.new('RGB', (240, 240), '#151B22')
-    draw = ImageDraw.Draw(image)
-    font_path = Path('C:/Windows/Fonts/segoeui.ttf')
-    font = ImageFont.truetype(str(font_path), 17) if font_path.exists() else ImageFont.load_default()
-    big = ImageFont.truetype(str(font_path), 27) if font_path.exists() else font
-    calendar = snapshot.get('calendar', {})
-    page = page_for(snapshot, frame)
-    draw.text((12, 10), 'АйТи:Ритм', font=font, fill='#E5E8EB')
-    if page == 'limits':
-        quota = snapshot.get('limits', {})
-        claude = snapshot.get('claude', {})
-        codex_left = 100 * (1 - quota['weekly_pct']) if 'weekly_pct' in quota and not quota.get('error') and time.time() - quota.get('checked_at', 0) < 600 else None
-        used = claude.get('limits', {}).get('seven_day', {}).get('used_percentage')
-        claude_left = 100 - used if used is not None and not claude.get('error') and time.time() - (claude.get('limits_at') or 0) < 600 else None
-        for y, provider, value in ((55, 'Codex', codex_left), (130, 'Claude', claude_left)):
-            draw.text((12, y), provider + ' · остаток недели', font=font, fill='#939DA7')
-            draw.text((12, y + 25), f'{max(0,min(100,value)):.1f}%' if value is not None else '—', font=big, fill='#E5E8EB')
-    elif page == 'sessions':
-        y = 52
-        for provider in ('codex', 'claude'):
-            data = snapshot.get(provider, {})
-            active = [row for row in data.get('sessions', []) if row['status'] != 'idle']
-            waiting = sum(row['status'] == 'waiting' for row in active)
-            draw.text((12, y), provider.title(), font=font, fill='#939DA7')
-            fresh = not data.get('error') and time.time() - data.get('checked_at', 0) < 180
-            draw.text((12, y + 25), f'{len(active)} / ждут {waiting}' if fresh else 'Нет данных', font=big, fill='#76B6EF')
-            y += 78
-    elif page == 'usage':
-        for y, provider in ((55, 'codex'), (130, 'claude')):
-            tokens = snapshot.get(provider, {}).get('tokens', {})
-            total = tokens.get('input', 0) + tokens.get('output', 0)
-            draw.text((12, y), provider.title() + ' · токены за день', font=font, fill='#939DA7')
-            data = snapshot.get(provider, {})
-            fresh = not data.get('error') and time.time() - data.get('checked_at', 0) < 180
-            draw.text((12, y + 25), f'{total:,}'.replace(',', ' ') if fresh else '—', font=big, fill='#E5E8EB')
-    else:
-        from datetime import datetime, timezone
-        events = [row for row in calendar.get('events', []) if not row.get('all_day') and datetime.fromisoformat(row['planned_date']).timestamp() >= time.time() - 300]
-        if urgent_meeting(snapshot):
-            events = [row for row in events if 0 < datetime.fromisoformat(row['planned_date']).timestamp() - time.time() <= 300]
-        event = events[0] if events else None
-        fresh = not calendar.get('error') and time.time() - calendar.get('checked_at', 0) < 180
-        draw.text((12, 55), 'Встречи' if fresh else 'Календарь устарел', font=font, fill='#939DA7')
-        if event:
-            start = datetime.fromisoformat(event['planned_date']).astimezone()
-            draw.text((12, 90), start.strftime('%d.%m %H:%M'), font=big, fill='#E6B66B')
-            delta = start.timestamp() - time.time()
-            draw.text((12, 175), 'Через '+str(max(0,int((delta+59)//60)))+' мин' if delta > 0 else 'Встреча началась', font=font, fill='#E6B66B')
-            if config.get('show_titles'):
-                draw.text((12, 140), event['subject'][:22], font=font, fill='#E5E8EB')
-        else:
-            draw.text((12, 100), 'Нет ближайших', font=font, fill='#E5E8EB')
-    image = image.rotate(int(config.get('rotation', 0)) % 360)
-    return image
+    from copy import deepcopy
+    from cube_art import render_cards, fresh, age, next_event, calendar_fresh, stamp
+    # Restore the established prism artwork without importing private collectors.
+    data = deepcopy(snapshot)
+    for event in data.get('calendar', {}).get('events', []):
+        # Keep the current app's local-time display for calendars that send UTC.
+        event['planned_date'] = stamp(event['planned_date']).astimezone().isoformat()
+        if not config.get('show_titles'):
+            event['subject'] = 'Название скрыто'
+    cards, _ = render_cards(data, fresh, age, next_event, calendar_fresh)
+    key = {'sessions': 'agents', 'usage': 'tokens'}.get(page_for(data, frame), page_for(data, frame))
+    return cards[key].rotate(int(config.get('rotation', 0)) % 360)

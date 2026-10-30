@@ -170,6 +170,20 @@ class CollectorTests(unittest.TestCase):
 
 
 class CubeTests(unittest.TestCase):
+    def test_restored_calendar_respects_title_permission_without_mutating_snapshot(self):
+        from datetime import timedelta
+        from cube_art import Canvas
+        now = datetime.now(timezone.utc)
+        snapshot = {'calendar': {'enabled': True, 'checked_at': now.timestamp(), 'events': [
+            {'planned_date': (now + timedelta(hours=2)).isoformat(), 'subject': 'SecretMeeting'}]}}
+        for allowed in (False, True):
+            with patch.object(Canvas, 'text', autospec=True) as text:
+                render(snapshot, dict(DEFAULTS['cube'], show_titles=allowed), 3)
+            drawn = ' '.join(str(call.args[3]) for call in text.call_args_list)
+            self.assertEqual('SecretMeeting' in drawn, allowed)
+            self.assertIn((now + timedelta(hours=2)).astimezone().strftime('%H:%M'), drawn)
+            self.assertEqual(snapshot['calendar']['events'][0]['subject'], 'SecretMeeting')
+
     def test_only_own_fixed_filenames_and_safe_metadata_are_sent(self):
         cube = Cube()
         config = dict(DEFAULTS['cube'], enabled=True, host='192.168.50.7')
