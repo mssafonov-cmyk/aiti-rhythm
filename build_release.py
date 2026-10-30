@@ -7,7 +7,7 @@ import re
 import shutil
 import zipfile
 
-VERSION = '1.1.0'
+VERSION = '1.1.1'
 FILES = (
     'README.md', 'PACKAGE-README.txt', 'LICENSE', 'THIRD-PARTY-NOTICES.md', 'SECURITY.md',
     '.gitignore', '.github/workflows/check.yml', 'requirements.txt', 'requirements-build.txt',

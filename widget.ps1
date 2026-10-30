@@ -49,6 +49,17 @@ function Label($s,$size=12,$color='#EDF4FD',$bold=$false){
 }
 function Put($panel,$item,$left,$top){[Windows.Controls.Canvas]::SetLeft($item,$left);[Windows.Controls.Canvas]::SetTop($item,$top);[void]$panel.Children.Add($item)}
 function Num($n){if($n -ge 1e6){return ('{0:0.0}M' -f ($n/1e6))};if($n -ge 1e3){return ('{0:0.0}K' -f ($n/1e3))};return [string]$n}
+function BurnNoticeText($burn){
+ $summary='Сейчас '+(Num $burn.per_min)+' ток/мин.'
+ $leader=@($burn.leaders|Select-Object -First 1)
+ if(-not $leader.Count){return $summary+"`nСессию определить не удалось."}
+ $item=$leader[0];$name=if($item.title){[string]$item.title}elseif($item.project){[string]$item.project}else{'Без названия'}
+ $name=($name -replace '\s+',' ').Trim()
+ if(-not $name){$name='Без названия'}
+ if($name.Length -gt 90){$length=89;if([char]::IsHighSurrogate($name[$length-1])){$length--};$name=$name.Substring(0,$length)+'…'}
+ $detail=if($burn.leader_basis -eq 'day'){'За день: '+(Num $item.day_tokens)+' токенов.'}elseif($null -ne $item.per_min){'Её расход: '+(Num $item.per_min)+' ток/мин.'}else{'Расход сессии недоступен.'}
+ return $summary+"`nСессия Codex: "+$name+"`n"+$detail
+}
 function NowSeconds{[DateTimeOffset]::UtcNow.ToUnixTimeSeconds()}
 function Fresh($obj,$seconds=600){return ($null -ne $obj -and -not $obj.error -and $null -ne $obj.checked_at -and ((NowSeconds)-[double]$obj.checked_at) -lt $seconds)}
 function EventTime($s){
@@ -204,7 +215,7 @@ function Tick{
   $script:urgent=$urgentNow
   $hot=(Fresh $data.codex 180) -and $data.codex.burn.alert
   UpdateCardSignals;UpdateFreshnessIndicator
-  if($hot -and -not $SelfTest -and (NowSeconds)-$lastBurnNotice -gt 600){$tray.ShowBalloonTip(5000,'Расход токенов ускорился',('Сейчас '+(Num $data.codex.burn.per_min)+'/мин. Самая затратная сессия показана в панели.'),[Windows.Forms.ToolTipIcon]::Warning);$script:lastBurnNotice=NowSeconds}
+  if($hot -and -not $SelfTest -and (NowSeconds)-$lastBurnNotice -gt 600){$tray.ShowBalloonTip(5000,'Расход токенов ускорился',(BurnNoticeText $data.codex.burn),[Windows.Forms.ToolTipIcon]::Warning);$script:lastBurnNotice=NowSeconds}
   # Freeze interactive controls under the pointer; explicit clicks redraw immediately.
   if($Body.Children.Count -eq 0 -or (-not $win.IsMouseOver -and [Windows.Input.Mouse]::LeftButton -ne 'Pressed')){Draw}
   FitScreen

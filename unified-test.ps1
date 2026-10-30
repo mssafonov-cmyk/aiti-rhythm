@@ -112,5 +112,12 @@ if(-not (Control 'MeetingCard')){throw 'Enabled calendar must restore its card'}
 if((MeetingUrl 'https://meet.google.com/abc-defg-hij') -ne 'https://meet.google.com/abc-defg-hij'){throw 'Google Meet link unsupported'}
 if(MeetingUrl 'https://meet.google.com.evil.example/abc-defg-hij'){throw 'Untrusted meeting host accepted'}
 $results+=@{checks='calendar off removes card/gap/warning; calendar on restores; Meet host allowlist';passed=$true}
+$notice=BurnNoticeText ([pscustomobject]@{per_min=1200000;leader_basis='window';leaders=@([pscustomobject]@{title='Разбор клиентской задачи';per_min=850000})})
+if($notice -notmatch 'Сессия Codex: Разбор клиентской задачи' -or $notice -notmatch 'Её расход: 850[.,]0K ток/мин'){throw 'Token alert must name the session and its own rate'}
+$unknown=BurnNoticeText ([pscustomobject]@{per_min=100000;leaders=@()})
+if($unknown -notmatch 'Сессию определить не удалось'){throw 'Token alert must not invent a session'}
+$long=BurnNoticeText ([pscustomobject]@{per_min=100000;leader_basis='day';leaders=@([pscustomobject]@{title=('Длинное название '*20);day_tokens=2000000})})
+if($long.Length -gt 240 -or $long -notmatch 'За день: 2[.,]0M токенов'){throw 'Long titles must fit the alert without confusing daily total with rate'}
+$results+=@{checks='token balloon identifies session and rate; honest missing session; bounded long title; correct daily units';passed=$true}
 $results|ConvertTo-Json|Set-Content -LiteralPath (Join-Path $root 'widget-test.json') -Encoding UTF8
 $script:closing=$true;$win.Close()
