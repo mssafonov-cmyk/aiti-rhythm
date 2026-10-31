@@ -167,7 +167,7 @@ def wrapper_text(command, root, home):
     else:
         # Rare custom non-ASCII install paths outside Windows profile folders.
         quote = lambda value:"'"+value.replace("'", "''")+"'"
-        script = ("$s=[Diagnostics.ProcessStartInfo]::new();$s.FileName="+quote(command[0])+";$s.Arguments="+
+        script = ("[Console]::OutputEncoding=[Text.UTF8Encoding]::new($false);$s=[Diagnostics.ProcessStartInfo]::new();$s.FileName="+quote(command[0])+";$s.Arguments="+
                   quote(subprocess.list2cmdline(args[1:]))+";$s.UseShellExecute=$false;$s.CreateNoWindow=$true;"
                   "$s.RedirectStandardInput=$true;$s.RedirectStandardOutput=$true;$s.RedirectStandardError=$true;"
                   "$p=[Diagnostics.Process]::Start($s);$e=$p.StandardError.ReadToEndAsync();"
@@ -182,7 +182,7 @@ def native_command(command, root, home):
     encoded = lambda value:base64.b64encode(str(value).encode('utf-8')).decode('ascii')
     quote = lambda value:"'"+value.replace("'", "''")+"'"
     args = [*command[1:], '--data-dir-b64', encoded(root), '--agy-statusline', '--agy-profile-b64', encoded(home)]
-    script = ("$s=[Diagnostics.ProcessStartInfo]::new();$s.FileName="+quote(command[0])+";$s.Arguments="+
+    script = ("[Console]::OutputEncoding=[Text.UTF8Encoding]::new($false);$s=[Diagnostics.ProcessStartInfo]::new();$s.FileName="+quote(command[0])+";$s.Arguments="+
               quote(subprocess.list2cmdline(args))+";$s.UseShellExecute=$false;$s.CreateNoWindow=$true;"
               "$s.RedirectStandardInput=$true;$s.RedirectStandardOutput=$true;$s.RedirectStandardError=$true;"
               "$p=[Diagnostics.Process]::Start($s);$e=$p.StandardError.ReadToEndAsync();"
