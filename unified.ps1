@@ -50,7 +50,7 @@ function DrawQuota($c,$narrow){
 function DrawUsage($c,$y,$compact,$narrow){
  $w=$c.Width;$burn=$data.codex.burn;$valid=(Fresh $data.codex 180) -and $data.codex.observed;$hot=$valid -and $burn.alert
  $minutes=if($burn.window_seconds){[int]($burn.window_seconds/60)}else{15};$color=if($hot){'#E6B66B'}else{'#E5E8EB'}
- $rate=Label $(if($valid){(Num $burn.per_min)+' ток/мин'}else{'Нет свежих данных'}) $(if($compact){13}else{16}) $color;$rate.Name='TokenRate';$rate.FontFamily='Bahnschrift';$rate.Width=$w-30;Put $c $rate 0 ($y+2)
+ $rate=Label $(if($valid){(Num $burn.per_min)+' ток/мин'}else{'Нет свежих данных'}) $(if($compact){13}else{16}) $color;$rate.Name='TokenRate';$rate.ToolTip=if($hot){BurnNoticeText $burn}else{'Расход токенов за выбранное окно'};$rate.FontFamily='Bahnschrift';$rate.Width=$w-30;Put $c $rate 0 ($y+2)
  $hint=if(-not $valid){'Расход неизвестен'}elseif($burn.level -eq 'idle'){'Простой · '+$minutes+' мин'}elseif($null -eq $burn.baseline_per_min){'Мало истории · '+$minutes+' мин'}else{'×'+$burn.ratio+' · за '+$minutes+' мин'}
  $caption=Label $hint 10 '#939DA7';$caption.Width=$w-30;Put $c $caption 0 ($y+25)
  $more=FlatButton $(if($showDetails){'⌃'}else{'›'}) 25 {$script:showDetails=-not $showDetails;Draw};$more.Name='DetailsToggle';$more.Height=24;$more.ToolTip='Расход за день и сессии';Put $c $more ($w-25) $y
@@ -58,7 +58,7 @@ function DrawUsage($c,$y,$compact,$narrow){
   $bars=@($burn.series);$peak=($bars|Measure-Object per_min -Maximum).Maximum
   if($valid -and $bars.Count){$spark=[Windows.Shapes.Polyline]::new();$spark.Stroke=Brush '#939DA7';$spark.StrokeThickness=1.2;for($j=0;$j -lt $bars.Count;$j++){$v=if($peak -gt 0){24*$bars[$j].per_min/$peak}else{0};[void]$spark.Points.Add([Windows.Point]::new(($w-2)*$j/[Math]::Max(1,$bars.Count-1),26-$v))};Put $c $spark 0 ($y+44)}
  }
- if($hot -or $showDetails){
+ if($showDetails -or ($hot -and -not $compact)){
   $start=$y+$(if($compact){45}else{80});Divider $c $start
   $label=Label $(if($hot){'↑ Расход выше обычного'}else{'Расход за день и сессии'}) 10 $(if($hot){'#E6B66B'}else{'#939DA7'});$label.Width=$w;Put $c $label 0 ($start+8)
   $leaders=@($burn.leaders|Select-Object -First 1)
@@ -143,7 +143,7 @@ function DrawUnified{
  $calendarVisible=CalendarVisible;$sessionsVisible=ViewOption 'sessions';$limitsVisible=ViewOption 'limits';$usageVisible=ViewOption 'usage';$compactUsage=ViewOption 'compact_usage';$automatic=ViewOption 'auto_height'
  $narrow=$rootCanvas.Width -lt 300;$meetingHeight=if($calendarVisible){130}else{0}
  $quotaHeight=if($limitsVisible){$(if($narrow){125}else{101})}else{0}
- $usageHeight=if($usageVisible){$(if($compactUsage){40}else{76})+$(if($hot -or $showDetails){80}else{0})}else{0}
+ $usageHeight=if($usageVisible){$(if($compactUsage){40}else{76})+$(if($showDetails -or ($hot -and -not $compactUsage)){80}else{0})}else{0}
  $resourceHeight=if($limitsVisible -or $usageVisible){26+$quotaHeight+$usageHeight+$(if($limitsVisible -and $usageVisible){10}else{0})}else{0}
  $rows=@();foreach($source in @($data.codex,$data.claude)){if(Fresh $source 180){$rows+=@($source.sessions|Where-Object {$null -ne $_ -and ($showCompleted -or $_.status -ne 'idle')})}}
  $naturalSessions=if($sessionsVisible){$(if($automatic){50+31*[Math]::Min(4,[Math]::Max(1,$rows.Count))}else{134})}else{0}

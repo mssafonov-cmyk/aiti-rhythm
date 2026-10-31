@@ -140,6 +140,14 @@ Draw;$win.UpdateLayout();Draw;$win.UpdateLayout()
 if((Control 'ClaudeFiveHour').Value -ne 0 -or (Control 'ClaudeFiveHour').Opacity -ne 1){throw 'An exhausted 5-hour quota is a known zero, not missing data'}
 if($script:cardSignals['ResourcesCard'].key -notmatch 'Claude5h'){throw 'An exhausted 5-hour window must signal independently of the weekly window'}
 if((Control 'CodexFiveHour').Value -ne 60){throw 'Codex short and weekly windows must be independent'}
+$compactHeight=$win.Height;$data.codex.burn.alert=$true
+Draw;$win.UpdateLayout();Draw;$win.UpdateLayout()
+if($win.Height -ne $compactHeight -or (Control 'TokenLeader')){throw 'A compact usage alert must not expand the window automatically'}
+if((Control 'TokenRate').ToolTip -notmatch 'Сессия Codex:'){throw 'Compact alerts must retain the leading session in the tooltip'}
+Click (Control 'DetailsToggle');$win.UpdateLayout();Draw;$win.UpdateLayout()
+if(-not (Control 'TokenLeader') -or $win.Height -le $compactHeight){throw 'Usage details must expand on explicit request'}
+Click (Control 'DetailsToggle');$data.codex.burn.alert=$false
+Draw;$win.UpdateLayout();Draw;$win.UpdateLayout()
 if((Control 'ClaudeReset').Text -ne 'Дата не передана'){throw 'Missing weekly reset must not be inferred from utilization'}
 $data.claude.limits.seven_day|Add-Member -NotePropertyName resets_at -NotePropertyValue $time.AddDays(3).ToString('o') -Force
 Draw;$win.UpdateLayout()
