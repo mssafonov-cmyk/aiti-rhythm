@@ -176,5 +176,19 @@ $data.view.calendar=$false;$data.view.sessions=$true;$data.view.limits=$true;$da
 Draw;$win.UpdateLayout();Preview 'rhythm-compact-default.png'
 $results+=@{checks='32 visibility/width combinations; automatic height; no clipping; independently exhausted 5-hour quota; reset dates; header-only mode';passed=$true}
 
+# Three real provider series share a compact plot, including the narrowest window.
+$samples=@([pscustomobject]@{at=$now-900;per_min=30},[pscustomobject]@{at=$now;per_min=80})
+$providers=@();$fixtureRate=20;foreach($name in @('Codex','Claude','Antigravity')){$providers+=[pscustomobject]@{name=$name;short=$(switch($name){'Codex'{'C'}'Claude'{'Cl'}default{'AG'}});color=(ProviderColor $name);day_tokens=123456;series=@([pscustomobject]@{at=$now-900;per_min=$fixtureRate},[pscustomobject]@{at=$now;per_min=$fixtureRate*2});note='Fixture native counters'};$fixtureRate+=20}
+$data|Add-Member -NotePropertyName usage -NotePropertyValue ([pscustomobject]@{checked_at=$now;observed=$true;providers=$providers;burn=[pscustomobject]@{per_min=160;window_seconds=900;alert=$false;level='normal';leaders=@()}}) -Force
+$data|Add-Member -NotePropertyName antigravity -NotePropertyValue ([pscustomobject]@{checked_at=$now;sessions=@([pscustomobject]@{id='00000000-0000-0000-0000-000000000099';provider='Antigravity';title='Проверка Antigravity';status='working';at=$now})}) -Force
+foreach($width in @(260,380)){
+ $win.Width=$width;$script:showDetails=$false;Draw;$win.UpdateLayout()
+ foreach($name in @('Codex','Claude','Antigravity')){if(-not (Control ('Legend'+$name)) -or -not (Control ('Graph'+$name))){throw 'Missing shared provider graph'}}
+ if((Control 'TokenRate').ActualWidth -le 55){throw 'Compact token rate too narrow'}
+ Preview ('rhythm-three-providers-'+$width+'.png')
+}
+$notice=BurnNoticeText ([pscustomobject]@{per_min=1000;leader_basis='window';leaders=@([pscustomobject]@{provider='Antigravity';title='Проверка';per_min=1000})})
+if($notice -notmatch 'Сессия Antigravity: Проверка'){throw 'Notification lost provider identity'}
+$results+=@{checks='three providers; shared colored compact graph; narrow layout; provider notification identity';passed=$true}
 $results|ConvertTo-Json|Set-Content -LiteralPath (Join-Path $root 'widget-test.json') -Encoding UTF8
 $script:closing=$true;$win.Close()

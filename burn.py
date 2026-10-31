@@ -1,5 +1,14 @@
 """Local token volume, including cache. Not a money or quota-cost estimate."""
 from statistics import median
+import json
+
+
+def metric_window(root):
+    try:
+        minutes = json.loads((root / 'metric-options.json').read_text(encoding='utf-8-sig')).get('window_minutes', 15)
+        return int(minutes) * 60 if int(minutes) in (15, 30, 60) else 900
+    except (OSError, ValueError, TypeError):
+        return 900
 
 def day_start_msk(now):
     return int((now+10800)//86400)*86400-10800

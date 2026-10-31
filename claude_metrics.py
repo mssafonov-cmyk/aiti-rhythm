@@ -46,7 +46,7 @@ def metadata_rows(path, now):
     return entry['rows']
 
 
-def claude_local(home, now=None):
+def claude_local(home, now=None, window_seconds=900):
     now = time.time() if now is None else now
     day = datetime.fromtimestamp(now, MSK).date()
     sessions, totals, points, messages, seen = [], dict(input=0, output=0, cache=0), [], {}, set()
@@ -88,7 +88,7 @@ def claude_local(home, now=None):
         output = usage.get('output_tokens', 0)
         totals['input'] += input_count; totals['output'] += output; totals['cache'] += cache
         points.append((item['at'], input_count + output, input_count - cache + output))
-    burn = velocity(points, now)
+    burn = velocity(points, now, window_seconds)
     burn.update(series=day_series(points, now), leaders=[], alert=False)
     return dict(checked_at=now, sessions=sessions, observed=bool(messages), tokens=totals,
                 burn=burn, **({'limits': limits, 'limits_at': limits_at} if limits else {}),

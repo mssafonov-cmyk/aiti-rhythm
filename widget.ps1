@@ -58,7 +58,7 @@ function BurnNoticeText($burn){
  if(-not $name){$name='Без названия'}
  if($name.Length -gt 90){$length=89;if([char]::IsHighSurrogate($name[$length-1])){$length--};$name=$name.Substring(0,$length)+'…'}
  $detail=if($burn.leader_basis -eq 'day'){'За день: '+(Num $item.day_tokens)+' токенов.'}elseif($null -ne $item.per_min){'Её расход: '+(Num $item.per_min)+' ток/мин.'}else{'Расход сессии недоступен.'}
- return $summary+"`nСессия Codex: "+$name+"`n"+$detail
+ $provider=if($item.provider){$item.provider}else{'Codex'};return $summary+"`nСессия "+$provider+": "+$name+"`n"+$detail
 }
 function NowSeconds{[DateTimeOffset]::UtcNow.ToUnixTimeSeconds()}
 function Fresh($obj,$seconds=600){return ($null -ne $obj -and -not $obj.error -and $null -ne $obj.checked_at -and ((NowSeconds)-[double]$obj.checked_at) -lt $seconds)}
@@ -213,9 +213,9 @@ function Tick{
   $ev=NextEvent;$delta=if($ev){(EventTime $ev.planned_date).ToUnixTimeSeconds()-(NowSeconds)}else{999999}
   $urgentNow=(CalendarFresh) -and $delta -gt 0 -and $delta -le 300
   $script:urgent=$urgentNow
-  $hot=(Fresh $data.codex 180) -and $data.codex.burn.alert
+  $usage=UsageData;$hot=(Fresh $usage 180) -and $usage.burn.alert
   UpdateCardSignals;UpdateFreshnessIndicator
-  if($hot -and -not $SelfTest -and (NowSeconds)-$lastBurnNotice -gt 600){$tray.ShowBalloonTip(5000,'Расход токенов ускорился',(BurnNoticeText $data.codex.burn),[Windows.Forms.ToolTipIcon]::Warning);$script:lastBurnNotice=NowSeconds}
+  if($hot -and -not $SelfTest -and (NowSeconds)-$lastBurnNotice -gt 600){$tray.ShowBalloonTip(5000,'Расход токенов ускорился',(BurnNoticeText $usage.burn),[Windows.Forms.ToolTipIcon]::Warning);$script:lastBurnNotice=NowSeconds}
   # Freeze interactive controls under the pointer; explicit clicks redraw immediately.
   if($Body.Children.Count -eq 0 -or (-not $win.IsMouseOver -and [Windows.Input.Mouse]::LeftButton -ne 'Pressed')){Draw}
   FitScreen

@@ -12,6 +12,7 @@ from app_paths import DATA as HERE
 DEFAULTS = {
     'codex': {'enabled': True, 'home': '', 'executable': '', 'limits': True},
     'claude': {'enabled': True, 'home': '', 'source': 'local'},
+    'antigravity': {'enabled': True, 'home': ''},
     'calendar': {'enabled': False, 'kind': 'ical', 'name': '', 'timezone': 'Europe/Moscow',
                  'mapping': {'id': 'id', 'subject': 'subject', 'start': 'start', 'end': 'end', 'url': 'url'}},
     'cube': {'enabled': False, 'host': '', 'rotation': 0, 'show_titles': False},

@@ -15,13 +15,16 @@ from cube import Cube
 from local_metrics import codex_local
 from runtime import HERE, load_settings, load_secrets, provider_home
 from safeio import atomic_json
+from antigravity_metrics import antigravity_local, profile
+from usage_metrics import combined_usage
+from burn import metric_window
 
 
 class Collector:
     def __init__(self, root=HERE):
         self.root, self.lock = root, threading.Lock()
         self.data, self.keys, self.pending, self.next_at = {}, {}, {}, {}
-        self.pool = ThreadPoolExecutor(max_workers=5, thread_name_prefix='rhythm')
+        self.pool = ThreadPoolExecutor(max_workers=6, thread_name_prefix='rhythm')
         self.cube = Cube()
 
     def key(self, name, settings):
@@ -31,13 +34,15 @@ class Collector:
         return hashlib.sha256(json.dumps([section, secret_time], sort_keys=True).encode()).hexdigest()
 
     def work(self, name, settings):
+        if name == 'antigravity':
+            return antigravity_local(profile(settings['antigravity']['home']), window_seconds=metric_window(self.root))
         if name == 'codex':
             return codex_local(provider_home(settings['codex']['home'], 'CODEX_HOME', '.codex'))
         if name == 'claude':
             if settings['claude'].get('source') == 'external':
                 from external_reader import read_external
                 return read_external(load_secrets(self.root).get('claude_command'))
-            return claude_local(provider_home(settings['claude']['home'], 'CLAUDE_CONFIG_DIR', '.claude'))
+            return claude_local(provider_home(settings['claude']['home'], 'CLAUDE_CONFIG_DIR', '.claude'), window_seconds=metric_window(self.root))
         if name == 'limits':
             return read_limits(settings['codex'], provider_home(settings['codex']['home'], 'CODEX_HOME', '.codex'))
         if settings['calendar'].get('kind') == 'external':
@@ -48,7 +53,7 @@ class Collector:
     def step(self, now=None):
         now = time.time() if now is None else now
         settings = load_settings(self.root)
-        for name in ('codex', 'claude', 'limits', 'calendar'):
+        for name in ('codex', 'claude', 'antigravity', 'limits', 'calendar'):
             section = settings['codex'] if name == 'limits' else settings[name]
             enabled = section['enabled'] and (section.get('limits', True) if name == 'limits' else True)
             key = self.key(name, settings)
@@ -71,6 +76,7 @@ class Collector:
         snapshot = dict(self.data, edition='personal', checked_at=now)
         snapshot['calendar_enabled'] = settings['calendar']['enabled']
         snapshot['view'] = copy.deepcopy(settings['view'])
+        snapshot['usage'] = combined_usage(snapshot, now)
         cube_key = self.key('cube', settings)
         cube_pending = self.pending.get('cube')
         if cube_pending and cube_pending[1].done():

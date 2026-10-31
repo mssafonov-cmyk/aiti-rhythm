@@ -1,5 +1,6 @@
 """Local discovery distinguishes available tools/journals from verified account access."""
 import shutil
+from antigravity_metrics import installed, profile
 from codex_account import executable
 from runtime import provider_home
 
@@ -16,4 +17,6 @@ def discover(settings):
         'claude_installed': bool(shutil.which('claude.exe') or shutil.which('claude.cmd') or shutil.which('claude')),
         'claude_journals': claude_journals,
         'claude_external': settings['claude'].get('source') == 'external',
+        'antigravity_installed': installed(),
+        'antigravity_journals': (profile(settings['antigravity']['home']) / 'brain').is_dir(),
     }
