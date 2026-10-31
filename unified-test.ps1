@@ -253,6 +253,9 @@ OpenSession ([pscustomobject]@{provider='Claude';id=$id;navigation=[pscustomobje
 if($script:testSessionUrl -ne ('vscode://anthropic.claude-code/open?session='+$id)){throw 'Claude route wrong'}
 OpenSession ([pscustomobject]@{provider='Codex';id=$id;navigation=[pscustomobject]@{kind='manual'}})
 if(-not $script:testSessionChoice -or $script:testSessionUrl){throw 'Unknown origin must not default to desktop'}
+if($script:testSessionChoices.Count -ne 3){throw 'Codex app choices lost'}
+OpenSession ([pscustomobject]@{provider='Claude';id=$id;navigation=[pscustomobject]@{kind='manual'}})
+if($script:testSessionChoices.Count -ne 1 -or $script:testSessionChoices[0].kind -ne 'claude_vscode' -or $script:testSessionChoices[0].title -ne 'Claude в VS Code'){throw 'Single Claude choice must retain its full label and destination'}
 $first=[pscustomobject]@{provider='Codex';id=$id;title='Тест & <сессия>';per_min=100;navigation=[pscustomobject]@{kind='codex_desktop'}}
 $burn=[pscustomobject]@{per_min=100;leaders=@($first);leader_basis='window'}
 if(-not (ShowBurnNotice $burn)){throw 'Toast failed to prepare'}

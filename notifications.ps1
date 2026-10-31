@@ -11,6 +11,14 @@ function SessionUrl($item){
   'codex_windsurf'{return 'windsurf://openai.chatgpt/local/'+$id}
  };return $null
 }
+function SessionChoices($provider){
+ if($provider -eq 'Claude'){[pscustomobject]@{title='Claude в VS Code';kind='claude_vscode'}}
+ elseif($provider -eq 'Codex' -or -not $provider){
+  [pscustomobject]@{title='Codex Desktop';kind='codex_desktop'}
+  [pscustomobject]@{title='Codex в VS Code';kind='codex_vscode'}
+  [pscustomobject]@{title='Codex в Cursor';kind='codex_cursor'}
+ }
+}
 function OpenSession($item){
  if($item -is [string]){
   $id=$item;$found=@(@($data.codex.sessions)+@($data.claude.sessions)+@($data.antigravity.sessions)+@((UsageData).burn.leaders)|Where-Object {$_.id -eq $id}|Select-Object -First 1)
@@ -18,15 +26,15 @@ function OpenSession($item){
  }
  if([string]$item.id -notmatch '^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$'){return}
  $url=SessionUrl $item
- if($SelfTest){$script:testSessionUrl=$url;$script:testSessionChoice=(-not $url);return}
+ if($SelfTest){$script:testSessionUrl=$url;$script:testSessionChoice=(-not $url);$script:testSessionChoices=@(SessionChoices $item.provider);return}
  if($url){
   try{Start-Process -FilePath $url;$script:notice='Открываю выбранную сессию…'}catch{$script:notice='Приложение не приняло ссылку на сессию'}
  }else{
   $choose=[Windows.Controls.ContextMenu]::new();$choose.Background=Brush '#1C232C';$choose.Foreground=Brush '#E5E8EB';$choose.BorderBrush=Brush '#3A4652'
   $title=[Windows.Controls.MenuItem]::new();$title.Header='Где открыть эту сессию?';$title.IsEnabled=$false;[void]$choose.Items.Add($title)
-  $options=if($item.provider -eq 'Claude'){,@('Claude в VS Code','claude_vscode')}elseif($item.provider -eq 'Codex' -or -not $item.provider){@(@('Codex Desktop','codex_desktop'),@('Codex в VS Code','codex_vscode'),@('Codex в Cursor','codex_cursor'))}else{@()}
+  $options=@(SessionChoices $item.provider)
   foreach($option in $options){
-   $entry=[Windows.Controls.MenuItem]::new();$entry.Header=$option[0];$entry.Tag=@{provider=$item.provider;id=$item.id;navigation=@{kind=$option[1]}}
+   $entry=[Windows.Controls.MenuItem]::new();$entry.Header=$option.title;$entry.Tag=@{provider=$item.provider;id=$item.id;navigation=@{kind=$option.kind}}
    $entry.Add_Click({param($s,$e) OpenSession $s.Tag});[void]$choose.Items.Add($entry)
   }
   $copy=[Windows.Controls.MenuItem]::new();$copy.Header='Скопировать ID сессии (терминал / другой клиент)';$copy.Tag=[string]$item.id;$copy.Add_Click({param($s,$e) [Windows.Clipboard]::SetText($s.Tag)});[void]$choose.Items.Add($copy)
