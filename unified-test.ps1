@@ -191,14 +191,20 @@ $results+=@{checks='32 visibility/width combinations; automatic height; no clipp
 
 # Three real provider series share a compact plot, including the narrowest window.
 $samples=@([pscustomobject]@{at=$now-900;per_min=30},[pscustomobject]@{at=$now;per_min=80})
-$providers=@();$fixtureRate=20;foreach($name in @('Codex','Claude','Antigravity')){$providers+=[pscustomobject]@{name=$name;short=$(switch($name){'Codex'{'C'}'Claude'{'Cl'}default{'AG'}});color=(ProviderColor $name);day_tokens=123456;series=@([pscustomobject]@{at=$now-900;per_min=$fixtureRate},[pscustomobject]@{at=$now;per_min=$fixtureRate*2});note='Fixture native counters'};$fixtureRate+=20}
-$data|Add-Member -NotePropertyName usage -NotePropertyValue ([pscustomobject]@{checked_at=$now;observed=$true;providers=$providers;burn=[pscustomobject]@{per_min=160;window_seconds=900;alert=$false;level='normal';leaders=@()}}) -Force
+$providers=@();$fixtureRate=20;foreach($name in @('Codex','Claude','Antigravity')){$providers+=[pscustomobject]@{name=$name;short=$(switch($name){'Codex'{'C'}'Claude'{'Cl'}default{'AG'}});color=(ProviderColor $name);day_tokens=$(switch($name){'Codex'{214200000}'Claude'{6043}default{71092}});series=@([pscustomobject]@{at=$now-900;per_min=$fixtureRate},[pscustomobject]@{at=$now;per_min=$fixtureRate*2});note='Fixture native counters'};$fixtureRate+=20}
+$data|Add-Member -NotePropertyName usage -NotePropertyValue ([pscustomobject]@{checked_at=$now;observed=$true;partial=$true;providers=$providers;burn=[pscustomobject]@{per_min=1600000;window_seconds=900;alert=$false;level='normal';leaders=@()}}) -Force
 $data|Add-Member -NotePropertyName antigravity -NotePropertyValue ([pscustomobject]@{checked_at=$now;sessions=@([pscustomobject]@{id='00000000-0000-0000-0000-000000000099';provider='Antigravity';title='Проверка Antigravity';status='working';at=$now})}) -Force
 foreach($width in @(260,380)){
  $win.Width=$width;$script:showDetails=$false;Draw;$win.UpdateLayout()
- foreach($name in @('Codex','Claude','Antigravity')){if(-not (Control ('Legend'+$name)) -or -not (Control ('Graph'+$name))){throw 'Missing shared provider graph'}}
- if((Control 'TokenRate').ActualWidth -le 55){throw 'Compact token rate too narrow'}
+ foreach($name in @('Codex','Claude','Antigravity')){if((Control ('Legend'+$name)).Text -ne $name -or -not (Control ('Daily'+$name))){throw 'Provider needs its full name and separate daily amount'};if(Control ('Graph'+$name)){throw 'Compact view must not mix a miniature graph with daily totals'}}
+ if((Control 'DailyUsageHeading').Text -ne 'ТОКЕНЫ ЗА СЕГОДНЯ' -or (Control 'TokenRate').Text -notmatch '^Среднее за 15 мин:'){throw 'Usage units and time periods must be explicit'}
+ $rateControl=Control 'TokenRate';$measure=Label $rateControl.Text $rateControl.FontSize;$measure.Measure([Windows.Size]::new([double]::PositiveInfinity,[double]::PositiveInfinity))
+ if($measure.DesiredSize.Width -gt $rateControl.ActualWidth){throw 'Rate period or units would be clipped'}
+ if($rateControl.Text -notmatch 'от '){throw 'Partial rate needs a readable lower-bound qualifier'}
  Preview ('rhythm-three-providers-'+$width+'.png')
+ Click (Control 'DetailsToggle');$win.UpdateLayout();Draw;$win.UpdateLayout()
+ foreach($name in @('Codex','Claude','Antigravity')){if(-not (Control ('Graph'+$name))){throw 'Provider history must be available in details'}}
+ Preview ('rhythm-provider-details-'+$width+'.png');Click (Control 'DetailsToggle')
 }
 $notice=BurnNoticeText ([pscustomobject]@{per_min=1000;leader_basis='window';leaders=@([pscustomobject]@{provider='Antigravity';title='Проверка';per_min=1000})})
 if($notice -notmatch 'Сессия Antigravity: Проверка'){throw 'Notification lost provider identity'}

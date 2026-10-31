@@ -32,7 +32,7 @@ function HasFiveHour{
 }
 function QuotaHeight($narrow){return 71+$(if($narrow){24}else{0})+$(if(HasFiveHour){8}else{0})}
 function DrawQuota($c,$narrow){
- $w=$c.Width;CardHeading $c 'НЕДЕЛЯ' 'Остаток'
+ $w=$c.Width;CardHeading $c 'ОСТАТОК НЕДЕЛИ' ''
  $gap=if($narrow){16}else{24};$half=($w-$gap)/2;$shift=if($narrow){24}else{0}
  $footer=58+$shift+$(if(HasFiveHour){8}else{0})
  for($i=0;$i -lt 2;$i++){
@@ -62,34 +62,44 @@ function UsageData{
  return [pscustomobject]@{burn=$data.codex.burn;observed=$data.codex.observed;checked_at=$data.codex.checked_at;providers=$providers}
 }
 function ProviderColor($name){switch($name){'Claude'{return '#BAABFF'}'Antigravity'{return '#99DDAA'}default{return '#56D8F1'}}}
+function TokenAmount($n){
+ if($n -ge 1e6){return ('{0:0.#} млн' -f ($n/1e6))};if($n -ge 1e3){return ('{0:0.#} тыс' -f ($n/1e3))};return ('{0:0}' -f $n)
+}
+function UsageHeight($compact,$hot){return 60+$(if(-not $compact -or $showDetails){70}else{0})+$(if($showDetails -or ($hot -and -not $compact)){42}else{0})}
 function DrawUsage($c,$y,$compact,$narrow){
  $w=$c.Width;$usage=UsageData;$burn=$usage.burn;$valid=(Fresh $usage 180) -and $usage.observed;$hot=$valid -and $burn.alert
- $minutes=if($burn.window_seconds){[int]($burn.window_seconds/60)}else{15};$color=if($hot){'#E6B66B'}else{'#E5E8EB'}
- $rate=Label $(if($valid){$(if($usage.partial){'≥'}else{''})+(Num $burn.per_min)+' ток/мин'}else{'Нет свежих данных'}) $(if($compact){13}else{16}) $color;$rate.Name='TokenRate';$rate.ToolTip=if($hot){BurnNoticeText $burn}else{'Расход токенов за выбранное окно'};$rate.FontFamily='Bahnschrift';$rate.Width=$w-30;Put $c $rate 0 ($y+2)
- $hint=if(-not $valid){'Расход неизвестен'}elseif($burn.level -eq 'idle'){'Простой · '+$minutes+' мин'}elseif($null -eq $burn.baseline_per_min){'Мало истории · '+$minutes+' мин'}else{'×'+$burn.ratio+' · за '+$minutes+' мин'}
+ $minutes=if($burn.window_seconds){[int]($burn.window_seconds/60)}else{15}
+ $heading=Label 'ТОКЕНЫ ЗА СЕГОДНЯ' 9 '#AAB7C4' $true;$heading.Name='DailyUsageHeading';$heading.Width=$w-30;$heading.ToolTip='С начала дня по МСК. Сумма по сессиям каждого инструмента, не стоимость подписки.';Put $c $heading 0 $y
  $providers=@($usage.providers);$cw=$w/[Math]::Max(1,$providers.Count)
  for($i=0;$i -lt $providers.Count;$i++){
-  $p=$providers[$i];$text=$p.short+' '+$(if($null -eq $p.day_tokens){'—'}else{$(if($p.partial){'≥'}else{''})+(Num $p.day_tokens)})
-  $legend=Label $text 10 $p.color;$legend.Name='Legend'+$p.name;$legend.Width=$cw-3
-  $legend.ToolTip=$p.name+' · за день '+$(if($null -eq $p.day_tokens){'нет данных'}else{(Num $p.day_tokens)+' токенов'})+"`n"+$(if($null -eq $p.per_min){'Текущая скорость неизвестна'}else{(Num $p.per_min)+' ток/мин'})+"`n"+$hint+"`n"+$p.note+$(if(-not @($p.series|Where-Object {$null -ne $_}).Count){"`nИстория графика недоступна"}else{''});Put $c $legend ($i*$cw) ($y+25)
+  $p=$providers[$i];$x=$i*$cw
+  $tip=$p.name+' · токены за сегодня: '+$(if($null -eq $p.day_tokens){'нет данных'}else{('{0:N0}' -f $p.day_tokens)})+"`n"+$(if($null -eq $p.per_min){'Скорость неизвестна'}else{(TokenAmount $p.per_min)+' ток/мин'})+"`n"+$p.note+$(if(-not @($p.series|Where-Object {$null -ne $_}).Count){"`nИстория графика недоступна"}else{''})
+  $dot=[Windows.Shapes.Rectangle]::new();$dot.Width=3;$dot.Height=3;$dot.Fill=Brush $p.color;Put $c $dot $x ($y+21)
+  $legend=Label $p.name 9 '#C4CED8';$legend.Name='Legend'+$p.name;$legend.Width=$cw-8;$legend.ToolTip=$tip;Put $c $legend ($x+7) ($y+16)
+  $text=if($null -eq $p.day_tokens){'—'}else{$(if($p.partial){'от '}else{''})+(TokenAmount $p.day_tokens)}
+  $value=Label $text $(if($text.Length -gt 9){11}else{13}) '#E5E8EB';$value.Name='Daily'+$p.name;$value.FontFamily='Bahnschrift';$value.Width=$cw-4;$value.ToolTip=$tip;Put $c $value $x ($y+29)
  }
- $more=FlatButton $(if($showDetails){'⌃'}else{'›'}) 25 {$script:showDetails=-not $showDetails;Draw};$more.Name='DetailsToggle';$more.Height=24;$more.ToolTip='Расход за день и сессии';Put $c $more ($w-25) $y
- # One shared scale and aligned 15-minute buckets; missing history stays missing.
- $allBars=@($providers|ForEach-Object {$_.series});$peak=($allBars|Measure-Object per_min -Maximum).Maximum
- $count=($providers|ForEach-Object {@($_.series).Count}|Measure-Object -Maximum).Maximum
- $plotW=if($compact){[Math]::Min(72,$w*0.27)}else{$w-2};$plotH=if($compact){15}else{24}
- foreach($p in $providers){$bars=@($p.series|Where-Object {$null -ne $_});if(-not $bars.Count){continue}
-  $spark=[Windows.Shapes.Polyline]::new();$spark.Name='Graph'+$p.name;$spark.ToolTip=$p.name+' · ток/мин · интервалы 15 мин';$spark.Stroke=Brush $p.color;$spark.StrokeThickness=1.2
-  for($j=0;$j -lt $bars.Count;$j++){$v=if($peak -gt 0){$plotH*$bars[$j].per_min/$peak}else{0};[void]$spark.Points.Add([Windows.Point]::new($plotW*$j/[Math]::Max(1,$count-1),$plotH-$v))}
-  Put $c $spark $(if($compact){$w-$plotW-30}else{0}) $(if($compact){$y+3}else{$y+44})
+ $speed=if($valid){$(if($usage.partial){'от '}else{''})+(TokenAmount $burn.per_min)+' ток/мин'}else{'нет данных'}
+ $rate=Label ('Среднее за '+$minutes+' мин: '+$speed) 10 $(if($hot){'#E6B66B'}else{'#AAB7C4'});$rate.Name='TokenRate';$rate.Width=$w
+ $rate.ToolTip='Средняя скорость по известным счётчикам за последние '+$minutes+' мин. Не расход за сутки.'+$(if($usage.partial){"`nПоказан минимум: у части источников неизвестна скорость."}else{''})+$(if($hot){"`n"+(BurnNoticeText $burn)}else{''});Put $c $rate 0 ($y+47)
+ $more=FlatButton $(if($showDetails){'⌃'}else{'›'}) 25 {$script:showDetails=-not $showDetails;Draw};$more.Name='DetailsToggle';$more.Height=19;$more.ToolTip='График скорости и самая затратная сессия';Put $c $more ($w-25) ($y-3)
+ if(-not $compact -or $showDetails){
+  Divider $c ($y+64)
+  $caption=Label 'Скорость за день' 9 '#AAB7C4';$caption.Width=$w*0.55;Put $c $caption 0 ($y+70)
+  $allBars=@($providers|ForEach-Object {$_.series});$peak=($allBars|Measure-Object per_min -Maximum).Maximum
+  $scale=Label $(if($null -ne $peak){'до '+(TokenAmount $peak)+'/мин'}else{'нет истории'}) 9 '#AAB7C4';$scale.Width=$w*0.45;$scale.TextAlignment='Right';Put $c $scale ($w*0.55) ($y+70)
+  $count=($providers|ForEach-Object {@($_.series).Count}|Measure-Object -Maximum).Maximum
+  foreach($p in $providers){$bars=@($p.series|Where-Object {$null -ne $_});if(-not $bars.Count){continue}
+   $spark=[Windows.Shapes.Polyline]::new();$spark.Name='Graph'+$p.name;$spark.ToolTip=$p.name+' · ток/мин · интервалы 15 мин · общая шкала';$spark.Stroke=Brush $p.color;$spark.StrokeThickness=1.2
+   for($j=0;$j -lt $bars.Count;$j++){$v=if($peak -gt 0){26*$bars[$j].per_min/$peak}else{0};[void]$spark.Points.Add([Windows.Point]::new(($w-2)*$j/[Math]::Max(1,$count-1),26-$v))};Put $c $spark 0 ($y+87)
+  }
+  $dates=@($allBars|Where-Object {$null -ne $_.at}|Sort-Object at)
+  if($dates.Count){foreach($end in @(0,1)){$stamp=if($end){$dates[-1].at}else{$dates[0].at};$label=Label ([DateTimeOffset]::FromUnixTimeSeconds([long]$stamp).ToOffset([TimeSpan]::FromHours(3)).ToString('HH:mm')) 8 '#939DA7';$label.Width=$w/2;$label.TextAlignment=if($end){'Right'}else{'Left'};Put $c $label ($end*$w/2) ($y+115)}}
  }
- if($compact){$rate.Width=$w-$plotW-35}
  if($showDetails -or ($hot -and -not $compact)){
-  $start=$y+$(if($compact){45}else{80});Divider $c $start
-  $label=Label $(if($hot){'↑ Расход выше обычного'}else{'Расход за день и сессии'}) 10 $(if($hot){'#E6B66B'}else{'#939DA7'});$label.Width=$w;Put $c $label 0 ($start+8)
+  $start=$y+130;$label=Label $(if($hot){'↑ Расход выше обычного'}else{'Сессия с наибольшим расходом'}) 9 $(if($hot){'#E6B66B'}else{'#AAB7C4'});$label.Width=$w;Put $c $label 0 ($start+2)
   $leaders=@($burn.leaders|Select-Object -First 1)
-  if($valid -and $leaders.Count){$lead=$leaders[0];$row=FlatButton '' $w {param($s,$e) OpenSession $s.Tag};$row.Name='TokenLeader';$row.Tag=$lead.id;$row.ToolTip=$lead.provider+' · '+$lead.title;$row.IsEnabled=(-not $lead.provider -or $lead.provider -eq 'Codex');$row.Height=21;$label=Label ('№1 '+$(if($burn.leader_basis -eq 'day'){(Num $lead.day_tokens)+' за день'}else{(Num $lead.per_min)+'/мин'})+' · '+$lead.title+' ↗') 10 '#BFB7A8';$label.Width=$w;$row.Content=$label;Put $c $row 0 ($start+27)}
-  $daily=Label ('Сегодня · '+(($providers|ForEach-Object {$_.short+' '+$(if($null -eq $_.day_tokens){'—'}else{Num $_.day_tokens})}) -join ' · ')) 10 '#939DA7';$daily.Name='DailyProviderTotals';$daily.Width=$w;$daily.ToolTip='Нативные счётчики источников, не стоимость подписки';Put $c $daily 0 ($start+51)
+  if($valid -and $leaders.Count){$lead=$leaders[0];$row=FlatButton '' $w {param($s,$e) OpenSession $s.Tag};$row.Name='TokenLeader';$row.Tag=$lead.id;$row.ToolTip=$lead.provider+' · '+$lead.title;$row.IsEnabled=(-not $lead.provider -or $lead.provider -eq 'Codex');$row.Height=21;$label=Label ($(if($lead.provider){$lead.provider+' · '}else{''})+$lead.title) 10 '#BFB7A8';$label.Width=$w;$row.Content=$label;Put $c $row 0 ($start+17)}else{$empty=Label 'Пока не определена' 10 '#939DA7';$empty.Width=$w;Put $c $empty 0 ($start+17)}
  }
 }
 
@@ -168,7 +178,7 @@ function DrawUnified{
  $calendarVisible=CalendarVisible;$sessionsVisible=ViewOption 'sessions';$limitsVisible=ViewOption 'limits';$usageVisible=ViewOption 'usage';$compactUsage=ViewOption 'compact_usage';$automatic=ViewOption 'auto_height'
  $narrow=$rootCanvas.Width -lt 300;$meetingHeight=if($calendarVisible){130}else{0}
  $quotaHeight=if($limitsVisible){QuotaHeight $narrow}else{0}
- $usageHeight=if($usageVisible){$(if($compactUsage){40}else{76})+$(if($showDetails -or ($hot -and -not $compactUsage)){80}else{0})}else{0}
+ $usageHeight=if($usageVisible){UsageHeight $compactUsage $hot}else{0}
  $resourceHeight=if($limitsVisible -or $usageVisible){26+$quotaHeight+$usageHeight+$(if($limitsVisible -and $usageVisible){10}else{0})}else{0}
  $rows=@();foreach($source in @($data.codex,$data.claude,$data.antigravity)){if(Fresh $source 180){$rows+=@($source.sessions|Where-Object {$null -ne $_ -and ($showCompleted -or $_.status -ne 'idle')})}}
  $naturalSessions=if($sessionsVisible){$(if($automatic){50+31*[Math]::Min(4,[Math]::Max(1,$rows.Count))}else{134})}else{0}
