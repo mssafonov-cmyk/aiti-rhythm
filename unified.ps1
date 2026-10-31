@@ -65,7 +65,7 @@ function DrawUsage($c,$y,$compact,$narrow){
  for($i=0;$i -lt $providers.Count;$i++){
   $p=$providers[$i];$text=$p.short+' '+$(if($null -eq $p.day_tokens){'—'}else{$(if($p.partial){'≥'}else{''})+(Num $p.day_tokens)})
   $legend=Label $text 10 $p.color;$legend.Name='Legend'+$p.name;$legend.Width=$cw-3
-  $legend.ToolTip=$p.name+' · за день '+$(if($null -eq $p.day_tokens){'нет данных'}else{(Num $p.day_tokens)+' токенов'})+"`n"+$hint+"`n"+$p.note+$(if(-not @($p.series|Where-Object {$null -ne $_}).Count){"`nИстория графика недоступна"}else{''});Put $c $legend ($i*$cw) ($y+25)
+  $legend.ToolTip=$p.name+' · за день '+$(if($null -eq $p.day_tokens){'нет данных'}else{(Num $p.day_tokens)+' токенов'})+"`n"+$(if($null -eq $p.per_min){'Текущая скорость неизвестна'}else{(Num $p.per_min)+' ток/мин'})+"`n"+$hint+"`n"+$p.note+$(if(-not @($p.series|Where-Object {$null -ne $_}).Count){"`nИстория графика недоступна"}else{''});Put $c $legend ($i*$cw) ($y+25)
  }
  $more=FlatButton $(if($showDetails){'⌃'}else{'›'}) 25 {$script:showDetails=-not $showDetails;Draw};$more.Name='DetailsToggle';$more.Height=24;$more.ToolTip='Расход за день и сессии';Put $c $more ($w-25) $y
  # One shared scale and aligned 15-minute buckets; missing history stays missing.

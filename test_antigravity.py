@@ -75,6 +75,7 @@ class AntigravityTests(unittest.TestCase):
         u=combined_usage({'antigravity':r,'claude':dict(checked_at=self.now,tokens=dict(input=777,output=3))},self.now)
         self.assertEqual(u['providers'][-2]['day_tokens'],780)
         self.assertEqual(u['providers'][-2]['series'],[])
+        self.assertTrue(u['partial'])  # A daily total cannot establish the current rate.
         self.assertEqual(sum(b['tokens'] for b in u['burn']['series']),120)
         self.assertEqual(u['burn']['leaders'][0]['provider'],'Antigravity')
         r['checked_at']=self.now-181

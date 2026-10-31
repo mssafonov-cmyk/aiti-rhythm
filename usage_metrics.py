@@ -33,7 +33,8 @@ def combined_usage(snapshot, now):
     rate = sum(rates)
     baseline = sum(baselines) if baselines and all(x is not None for x in baselines) else None
     leaders.sort(key=lambda x: (x.get('per_min', 0) if rate else x.get('day_tokens', 0)), reverse=True)
-    return dict(providers=providers, observed=bool(rates), checked_at=now, partial=any(p['partial'] for p in providers),
+    incomplete = any(p['partial'] or (p['per_min'] is None and (p['day_tokens'] or 0) > 0) for p in providers)
+    return dict(providers=providers, observed=bool(rates), checked_at=now, partial=incomplete,
                 burn=dict(per_min=rate, baseline_per_min=baseline, window_seconds=window,
                           ratio=round(rate / baseline, 1) if baseline else None,
                           level=classify(rate, baseline), alert=hot, leaders=leaders[:10],
