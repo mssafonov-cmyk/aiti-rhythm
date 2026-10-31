@@ -53,7 +53,12 @@ class Collector:
 
     def work(self, name, settings):
         if name == 'antigravity':
-            return antigravity_local(profile(settings['antigravity']['home']), window_seconds=metric_window(self.root))
+            home = profile(settings['antigravity']['home'])
+            result = antigravity_local(home, window_seconds=metric_window(self.root))
+            if settings['antigravity'].get('capture_quota'):
+                from antigravity_quota import read_quota
+                result.update(read_quota(self.root, home))
+            return result
         if name == 'codex':
             return codex_local(provider_home(settings['codex']['home'], 'CODEX_HOME', '.codex'))
         if name == 'claude':

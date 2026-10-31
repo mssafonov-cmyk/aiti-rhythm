@@ -1,5 +1,5 @@
 #ifndef Version
-#define Version "1.3.3"
+#define Version "1.4.0"
 #endif
 [Setup]
 AppId={{C3878BC6-5661-4EF2-9444-402206FE98F3}
@@ -45,6 +45,7 @@ Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: 
 Filename: "{app}\Rhythm.exe"; Description: "Открыть АйТи:Ритм"; Flags: nowait postinstall skipifsilent
 
 [UninstallRun]
+Filename: "{app}\RhythmCore.exe"; Parameters: "--remove-antigravity-capture"; Flags: runhidden waituntilterminated; RunOnceId: "RestoreAntigravity"
 Filename: "{app}\RhythmCore.exe"; Parameters: "--shutdown"; Flags: runhidden waituntilterminated; RunOnceId: "StopRhythm"
 
 [Code]

@@ -104,10 +104,12 @@ Add-Type -AssemblyName PresentationFramework,PresentationCore,WindowsBase
       <TextBlock x:Name="DetectionAntigravity" Style="{StaticResource Hint}"/>
       <StackPanel x:Name="AntigravityFields">
        <TextBlock Text="Папка профиля Antigravity CLI" Style="{StaticResource Caption}"/><TextBox x:Name="AntigravityHome" ToolTip="Пусто — ~/.gemini/antigravity-cli текущего пользователя"/>
+       <CheckBox x:Name="AntigravityQuota" Content="Передавать остаток лимитов в Ритм" Margin="0,12,0,0"/>
+       <TextBlock Text="После сохранения откройте agy. Вход остаётся в Antigravity; существующая строка состояния сохраняется. При отключении перезапустите agy, чтобы применить возврат." Style="{StaticResource Hint}" FontSize="11" Margin="0,7,0,0"/>
        <TextBlock Text="Войдите в agy обычным способом. Ритм читает названия и состояния сессий, а также числовые счётчики из локальных журналов. Запросы к модели не запускаются." Style="{StaticResource Hint}" Margin="0,10,0,0"/>
       </StackPanel>
      </StackPanel></Border>
-     <TextBlock Text="Квоты подписки в этих журналах не передаются. Посмотреть их можно командой /usage в самой Antigravity. Если программа не найдена, она не занимает место в панели." Style="{StaticResource Hint}" Margin="5,0,10,12"/>
+     <TextBlock Text="Gemini и другие модели имеют отдельные квоты. Нажмите на строку Antigravity в блоке недельного остатка, чтобы переключить группу. Подробности и время обновления — по наведению." Style="{StaticResource Hint}" Margin="5,0,10,12"/>
     </StackPanel>
     <StackPanel x:Name="PageCalendar" Visibility="Collapsed">
      <Border Style="{StaticResource Card}"><StackPanel>
@@ -161,7 +163,7 @@ Add-Type -AssemblyName PresentationFramework,PresentationCore,WindowsBase
 </Window>
 '@
 $window=[Windows.Markup.XamlReader]::Load([Xml.XmlNodeReader]::new($xaml))
-$controls=@{};foreach($name in @('Antigravity','AntigravityHome','ClaudeSource','ClaudeCommand','CalendarCommand','Codex','CodexHome','CodexExe','Limits','Claude','ClaudeHome','Calendar','Kind','CalendarName','Timezone','CalendarUrl','Username','Password','Mapping','Cube','CubeHost','Rotation','Titles','Save','Cancel','Status')){$controls[$name]=$window.FindName($name)}
+$controls=@{};foreach($name in @('Antigravity','AntigravityQuota','AntigravityHome','ClaudeSource','ClaudeCommand','CalendarCommand','Codex','CodexHome','CodexExe','Limits','Claude','ClaudeHome','Calendar','Kind','CalendarName','Timezone','CalendarUrl','Username','Password','Mapping','Cube','CubeHost','Rotation','Titles','Save','Cancel','Status')){$controls[$name]=$window.FindName($name)}
 $viewControls=@{calendar='ViewCalendar';sessions='ViewSessions';limits='ViewLimits';usage='ViewUsage';compact_usage='ViewCompactUsage';auto_height='ViewAutoHeight'}
 foreach($name in $viewControls.Values){$controls[$name]=$window.FindName($name)}
 $icon=Join-Path $PSScriptRoot 'indicators.ico'
@@ -203,6 +205,7 @@ foreach($key in $viewControls.Keys){$controls[$viewControls[$key]].IsChecked=if(
 $window.FindName('DetectionAntigravity').Text='Проверим наличие Antigravity при запуске.'
 if(Test-Path -LiteralPath $discoveryPath){$found=Get-Content -LiteralPath $discoveryPath -Raw -Encoding UTF8|ConvertFrom-Json;$window.FindName('DetectionAntigravity').Text=if($found.antigravity_journals){'Журналы Antigravity CLI найдены.'}elseif($found.antigravity_installed){'Программа найдена. Начните первую сессию.'}else{'Antigravity пока не найдена.'}}
 $controls.Codex.IsChecked=if($config){[bool]$config.codex.enabled}else{$true};$controls.Limits.IsChecked=if($config){[bool]$config.codex.limits}else{$true}
+$controls.AntigravityQuota.IsChecked=[bool]$config.antigravity.capture_quota
 $controls.Antigravity.IsChecked=if($config -and $null -ne $config.antigravity.enabled){[bool]$config.antigravity.enabled}else{$true};$controls.AntigravityHome.Text=[string]$config.antigravity.home
 $controls.Claude.IsChecked=if($config){[bool]$config.claude.enabled}else{$true};$controls.Calendar.IsChecked=[bool]$config.calendar.enabled;$controls.Cube.IsChecked=[bool]$config.cube.enabled
 $controls.CodexHome.Text=[string]$config.codex.home;$controls.CodexExe.Text=[string]$config.codex.executable;$controls.ClaudeHome.Text=[string]$config.claude.home
@@ -220,7 +223,7 @@ $controls.Save.Add_Click({
   $controls.Status.Text='';$controls.Status.Visibility='Collapsed'
   $values=@{
    codex=@{enabled=[bool]$controls.Codex.IsChecked;home=$controls.CodexHome.Text.Trim();executable=$controls.CodexExe.Text.Trim();limits=[bool]$controls.Limits.IsChecked}
-   antigravity=@{enabled=[bool]$controls.Antigravity.IsChecked;home=$controls.AntigravityHome.Text.Trim()}
+   antigravity=@{enabled=[bool]$controls.Antigravity.IsChecked;home=$controls.AntigravityHome.Text.Trim();capture_quota=[bool]$controls.AntigravityQuota.IsChecked}
    claude=@{enabled=[bool]$controls.Claude.IsChecked;home=$controls.ClaudeHome.Text.Trim();source=[string]$controls.ClaudeSource.SelectedItem.Tag}
    calendar=@{enabled=[bool]$controls.Calendar.IsChecked;kind=[string]$controls.Kind.SelectedItem.Tag;name=$controls.CalendarName.Text.Trim();timezone=$controls.Timezone.Text.Trim();mapping=$(if($controls.Calendar.IsChecked -and $controls.Kind.SelectedItem.Tag -eq 'odata'){$controls.Mapping.Text|ConvertFrom-Json}else{$initialMapping})}
    cube=@{enabled=[bool]$controls.Cube.IsChecked;host=$controls.CubeHost.Text.Trim();rotation=[int][string]$controls.Rotation.SelectedItem.Content;show_titles=[bool]$controls.Titles.IsChecked}

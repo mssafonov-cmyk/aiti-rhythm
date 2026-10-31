@@ -100,7 +100,7 @@ function StatusGlyph($state){
 function RateColor($level){switch($level){'critical'{'#FF7F87'}'warning'{'#FFD374'}'normal'{'#99ADA9'}'below'{'#76B6EF'}'idle'{'#94A7BF'}default{'#BAABFF'}}}
 function SaveState{
  if($SelfTest){return}
- @{x=$win.Left;y=$win.Top;width=$win.Width;height=$win.Height;design=2;locked=$locked;topmost=$win.Topmost;auto=$auto;page=$page;alpha=$bgAlpha;showCompleted=$showCompleted}|ConvertTo-Json|Set-Content -LiteralPath $statePath -Encoding UTF8
+ @{x=$win.Left;y=$win.Top;width=$win.Width;height=$win.Height;design=2;locked=$locked;topmost=$win.Topmost;auto=$auto;page=$page;alpha=$bgAlpha;showCompleted=$showCompleted;agyQuotaGroup=$script:agyQuotaGroup}|ConvertTo-Json|Set-Content -LiteralPath $statePath -Encoding UTF8
 }
 function FitScreen{
  # WPF positions use DIPs; convert work areas from physical pixels.
@@ -196,7 +196,7 @@ $win.Add_Closing({param($s,$e) if(-not $closing -and -not $SelfTest){$e.Cancel=$
 $win.Add_SizeChanged({SaveState})
 $Body.Add_SizeChanged({if($script:data -and -not $script:layoutBusy){$script:layoutBusy=$true;try{Draw}finally{$script:layoutBusy=$false}}})
 try{
- if(Test-Path -LiteralPath $statePath){$s=Get-Content -LiteralPath $statePath -Raw|ConvertFrom-Json;$win.Left=$s.x;$win.Top=$s.y;$win.Width=[Math]::Max(260,[Math]::Min(600,$s.width));$win.Height=[Math]::Max(80,[Math]::Min(900,$s.height));$script:locked=[bool]$s.locked;$win.Topmost=[bool]$s.topmost;$script:auto=[bool]$s.auto;$script:page=[Math]::Max(0,[Math]::Min(3,[int]$s.page));if($null -ne $s.showCompleted){$script:showCompleted=[bool]$s.showCompleted};if($s.alpha){$script:bgAlpha=[int]$s.alpha};if($s.design -ne 2){$win.Height=[Math]::Max(600,$win.Height)}}
+ if(Test-Path -LiteralPath $statePath){$s=Get-Content -LiteralPath $statePath -Raw|ConvertFrom-Json;$win.Left=$s.x;$win.Top=$s.y;$win.Width=[Math]::Max(260,[Math]::Min(600,$s.width));$win.Height=[Math]::Max(80,[Math]::Min(900,$s.height));$script:locked=[bool]$s.locked;$win.Topmost=[bool]$s.topmost;$script:auto=[bool]$s.auto;$script:page=[Math]::Max(0,[Math]::Min(3,[int]$s.page));if($null -ne $s.showCompleted){$script:showCompleted=[bool]$s.showCompleted};if($s.agyQuotaGroup -in @('gemini','3p')){$script:agyQuotaGroup=$s.agyQuotaGroup};if($s.alpha){$script:bgAlpha=[int]$s.alpha};if($s.design -ne 2){$win.Height=[Math]::Max(600,$win.Height)}}
  else{$win.Left=-10000;$win.Top=-10000}
 }catch{$win.Left=-10000;$win.Top=-10000}
 $script:auto=$false;$topMenu.IsChecked=$win.Topmost;$Pin.Content=if($locked){'◆'}else{'◇'};$Shell.Background=Brush ('#{0:X2}151B22' -f $bgAlpha)

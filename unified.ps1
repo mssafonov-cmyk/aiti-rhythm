@@ -3,6 +3,27 @@ $script:showCompleted=$true
 $script:signalKey=''
 $script:showDetails=$false
 $script:cardSignals=@{}
+$script:agyQuotaGroup='gemini'
+function AgyBucket($period,$group=''){
+ if(-not $group){$group=$script:agyQuotaGroup};$source=$data.antigravity
+ if($source.enabled -eq $false -or -not $source.quota_at -or (NowSeconds)-$source.quota_at -ge 86400){return $null}
+ $bucket=$source.quota.($group+'-'+$period)
+ if($null -eq $bucket.remaining_fraction -or ($bucket.reset_at -and $bucket.reset_at -le (NowSeconds))){return $null};return $bucket
+}
+function AgyGroup{
+ if(AgyBucket 'weekly'){return $script:agyQuotaGroup}
+ foreach($group in @('gemini','3p')){if(AgyBucket 'weekly' $group){return $group}};return ''
+}
+function AgyQuotaHeight{if(AgyGroup){return 44};return 0}
+function ShowAgyGroups($sender){
+ $menu=[Windows.Controls.ContextMenu]::new()
+ $menu.Background=Brush '#1C232C';$menu.Foreground=Brush '#E5E8EB';$menu.BorderBrush=Brush '#3A4652'
+ foreach($group in @('gemini','3p')){
+  $bucket=AgyBucket 'weekly' $group;if(-not $bucket){continue}
+  $item=[Windows.Controls.MenuItem]::new();$item.Header=$(if($group -eq 'gemini'){'Gemini'}else{'Другие модели'})+(' · {0:0.#}%' -f (100*$bucket.remaining_fraction));$item.Tag=$group
+  $item.Add_Click({param($s,$e) $script:agyQuotaGroup=$s.Tag;Draw;SaveState});[void]$menu.Items.Add($item)
+ };$sender.ContextMenu=$menu;$menu.PlacementTarget=$sender;$menu.IsOpen=$true
+}
 function WeeklyRemaining($provider){
  if($provider -eq 'Codex'){
   if((Fresh $data.limits) -and $null -ne $data.limits.weekly_pct){return [Math]::Max(0.0,[Math]::Min(100.0,100*(1-[double]$data.limits.weekly_pct)))}
@@ -30,7 +51,7 @@ function QuotaReset($provider,$window){
 function HasFiveHour{
  foreach($provider in @('Codex','Claude')){if($null -ne (FiveHourRemaining $provider)){return $true}};return $false
 }
-function QuotaHeight($narrow){return 71+$(if($narrow){24}else{0})+$(if(HasFiveHour){8}else{0})}
+function QuotaHeight($narrow){return 71+$(if($narrow){24}else{0})+$(if(HasFiveHour){8}else{0})+(AgyQuotaHeight)}
 function DrawQuota($c,$narrow){
  $w=$c.Width;CardHeading $c 'ОСТАТОК НЕДЕЛИ' ''
  $gap=if($narrow){16}else{24};$half=($w-$gap)/2;$shift=if($narrow){24}else{0}
@@ -51,6 +72,18 @@ function DrawQuota($c,$narrow){
   $reset=QuotaReset $provider 'weekly'
   $text=if($null -eq $left){'Квота недоступна'}elseif($reset){'До '+$reset.ToString('dd.MM HH:mm')}else{'Дата не передана'}
   $label=Label $text 9 '#939DA7';$label.Name=$provider+'Reset';$label.Width=$half;$label.ToolTip=if($reset){'Сброс недельной квоты: '+$reset.ToString('dd.MM.yyyy HH:mm')}else{'Источник передал расход, но не передал дату сброса недельной квоты.'};Put $c $label $x $footer
+ }
+ $group=AgyGroup
+ if($group){
+  $top=(QuotaHeight $narrow)-44;$week=AgyBucket 'weekly' $group;$short=AgyBucket '5h' $group;$left=100*$week.remaining_fraction
+  $stale=(NowSeconds)-$data.antigravity.quota_at -ge 600
+  $tip='Antigravity · '+$(if($group -eq 'gemini'){'Gemini'}else{'Другие модели'})+(' · неделя: {0:0.#}%' -f $left)
+  foreach($period in @('weekly','5h')){$bucket=AgyBucket $period $group;if($bucket){$tip+="`n"+$(if($period -eq 'weekly'){'Неделя'}else{'5 часов'})+(' · остаток {0:0.#}%' -f (100*$bucket.remaining_fraction));if($bucket.reset_at){$tip+=' · сброс '+[DateTimeOffset]::FromUnixTimeSeconds([long]$bucket.reset_at).ToLocalTime().ToString('dd.MM HH:mm')}}}
+  $tip+="`nПолучено от agy: "+[DateTimeOffset]::FromUnixTimeSeconds([long]$data.antigravity.quota_at).ToLocalTime().ToString('dd.MM HH:mm')+$(if($stale){"`n* Сохранённый остаток; откройте agy для обновления."}else{''})
+  $choose=FlatButton ('Antigravity · '+$(if($group -eq 'gemini'){'Gemini'}else{'Другие'})+' ▾') ($w-58) {param($s,$e) ShowAgyGroups $s};$choose.Name='AgyQuotaGroup';$choose.Height=20;$choose.FontSize=10;$choose.ToolTip=$tip;Put $c $choose 0 ($top+4)
+  $value=Label (('{0:0.#}%' -f $left)+$(if($stale){'*'}else{''})) 14 $(if($stale){'#ADB8C3'}else{'#E5E8EB'});$value.Name='AntigravityRemaining';$value.Width=58;$value.TextAlignment='Right';$value.ToolTip=$tip;Put $c $value ($w-58) ($top+3)
+  $bar=[Windows.Controls.ProgressBar]::new();$bar.Name='AntigravityWeekBar';$bar.Width=$w;$bar.Height=3;$bar.Maximum=100;$bar.Value=$left;$bar.Background=Brush '#343D47';$bar.Foreground=Brush '#99DDAA';$bar.BorderThickness=0;$bar.ToolTip=$tip;Put $c $bar 0 ($top+27)
+  if($short){$bar=[Windows.Controls.ProgressBar]::new();$bar.Name='AntigravityFiveHour';$bar.Width=$w;$bar.Height=2;$bar.Maximum=100;$bar.Value=100*$short.remaining_fraction;$bar.Background=Brush $(if($bar.Value -eq 0){'#6A5030'}else{'#343D47'});$bar.Foreground=Brush '#A8BECD';$bar.BorderThickness=0;$bar.ToolTip=$tip;Put $c $bar 0 ($top+34)}
  }
 }
 function UsageData{
@@ -141,6 +174,7 @@ function UpdateCardSignals{
  $event=SelectedEvent;$delta=if($event){(EventTime $event.planned_date).ToUnixTimeSeconds()-(NowSeconds)}else{999999}
  $meetingKey=if((CalendarFresh) -and $delta -gt 0 -and $delta -le 300){'meeting:'+$event.ref}else{''}
  $low=@();if(ViewOption 'limits'){foreach($provider in @('Codex','Claude')){$left=WeeklyRemaining $provider;if($null -ne $left -and $left -le 5){$low+=$provider};$short=FiveHourRemaining $provider;if($null -ne $short -and $short -le 5){$low+=($provider+'5h')}}}
+ if((ViewOption 'limits') -and $data.antigravity.quota_at -and (NowSeconds)-$data.antigravity.quota_at -lt 600){foreach($period in @('weekly','5h')){$bucket=AgyBucket $period;if($bucket -and $bucket.remaining_fraction -le 0.05){$low+=('Antigravity'+$period)}}}
  $usage=UsageData;$burnKey=if((ViewOption 'usage') -and (Fresh $usage 180) -and $usage.burn.alert){'burn:'+(@($usage.burn.leaders)[0].id)}else{''}
  CardSignal $script:meetingBorder $meetingKey;CardSignal $script:resourceBorder ($burnKey+($low -join ','))
  if($script:meetingBorder){

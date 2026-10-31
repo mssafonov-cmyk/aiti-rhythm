@@ -217,5 +217,30 @@ foreach($width in @(260,380)){
 $notice=BurnNoticeText ([pscustomobject]@{per_min=1000;leader_basis='window';leaders=@([pscustomobject]@{provider='Antigravity';title='Проверка';per_min=1000})})
 if($notice -notmatch 'Сессия Antigravity: Проверка'){throw 'Notification lost provider identity'}
 $results+=@{checks='three providers; shared colored compact graph; narrow layout; provider notification identity';passed=$true}
+# Real quota shape: independent Gemini/third-party windows, zero/missing/expired/stale.
+$data.antigravity|Add-Member -NotePropertyName quota_at -NotePropertyValue $now -Force
+$data.antigravity|Add-Member -NotePropertyName quota -NotePropertyValue ([pscustomobject]@{
+ 'gemini-weekly'=[pscustomobject]@{remaining_fraction=0.9994;reset_at=$now+86400}
+ 'gemini-5h'=[pscustomobject]@{remaining_fraction=0;reset_at=$now+3600}
+ '3p-weekly'=[pscustomobject]@{remaining_fraction=0.9827;reset_at=$now+86400}
+}) -Force
+foreach($width in @(260,380)){
+ $win.Width=$width;$script:agyQuotaGroup='gemini';Draw;$win.UpdateLayout();Draw;$win.UpdateLayout()
+ if(-not (Control 'AntigravityRemaining') -or (Control 'AntigravityFiveHour').Value -ne 0){throw 'Antigravity quotas/known zero missing'}
+ if($script:cardSignals['ResourcesCard'].key -notmatch 'Antigravity5h'){throw 'Exhausted Antigravity window must signal'}
+ if((Control 'AgyQuotaGroup').ToolTip -notmatch '5 часов' -or (Control 'AgyQuotaGroup').ToolTip -notmatch 'сброс'){throw 'Native quota period/reset lost'}
+ Preview ('rhythm-agy-quota-'+$width+'.png')
+ $button=Control 'AgyQuotaGroup';Click $button
+ if($button.ContextMenu.Items.Count -ne 2){throw 'Need both real quota groups'}
+ $button.ContextMenu.Items[1].RaiseEvent([Windows.RoutedEventArgs]::new([Windows.Controls.MenuItem]::ClickEvent));$button.ContextMenu.IsOpen=$false
+ $win.UpdateLayout();Draw;$win.UpdateLayout()
+ if((Control 'AntigravityRemaining').Text -notmatch '^98[.,]3%' -or (Control 'AntigravityFiveHour')){throw 'Quota groups must switch independently; no missing-window placeholder'}
+}
+$data.antigravity.quota_at=$now-601;Draw;$win.UpdateLayout()
+if((Control 'AntigravityRemaining').Text -notmatch '\*$' -or (Control 'AgyQuotaGroup').ToolTip -notmatch 'Сохранённый'){throw 'Cached quota must explain freshness'}
+$data.antigravity.quota.'gemini-weekly'.reset_at=$now-1;$data.antigravity.quota.'3p-weekly'.reset_at=$now-1
+Draw;$win.UpdateLayout();Draw;$win.UpdateLayout()
+if(Control 'AntigravityRemaining'){throw 'Expired quotas must not become100% or remain visible'}
+$results+=@{checks='Antigravity real quota groups; menu; zero/missing/expired/stale; compact260/380; period/reset metadata';passed=$true}
 $results|ConvertTo-Json|Set-Content -LiteralPath (Join-Path $root 'widget-test.json') -Encoding UTF8
 $script:closing=$true;$win.Close()

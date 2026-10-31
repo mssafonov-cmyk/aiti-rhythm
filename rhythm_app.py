@@ -37,6 +37,7 @@ def main():
         sys.stderr.reconfigure(encoding='utf-8')
     parser = argparse.ArgumentParser()
     parser.add_argument('--data-dir')
+    parser.add_argument('--data-dir-b64')
     parser.add_argument('--collector', action='store_true')
     parser.add_argument('--once', action='store_true')
     parser.add_argument('--configure-stdin', action='store_true')
@@ -48,7 +49,15 @@ def main():
     parser.add_argument('--recover', action='store_true')
     parser.add_argument('--legacy-root')
     parser.add_argument('--legacy-provider', choices=['calendar', 'claude'])
+    parser.add_argument('--agy-statusline', action='store_true')
+    parser.add_argument('--agy-profile')
+    parser.add_argument('--agy-profile-b64')
+    parser.add_argument('--remove-antigravity-capture', action='store_true')
     args = parser.parse_args()
+    if args.data_dir_b64 or args.agy_profile_b64:
+        import base64
+        if args.data_dir_b64:args.data_dir=base64.b64decode(args.data_dir_b64, validate=True).decode('utf-8')
+        if args.agy_profile_b64:args.agy_profile=base64.b64decode(args.agy_profile_b64, validate=True).decode('utf-8')
     if args.data_dir:
         os.environ['RHYTHM_DATA_DIR'] = str(Path(args.data_dir).resolve())
     from app_paths import DATA, ASSETS, PROGRAM, VERSION, core_command
@@ -60,6 +69,15 @@ def main():
     build_file = ASSETS / 'build-info.json'
     build_info = json.loads(build_file.read_text(encoding='utf-8')) if build_file.exists() else {}
     os.environ['RHYTHM_BUILD_COMMIT'] = build_info.get('source_commit', 'source')
+    if args.agy_statusline:
+        from antigravity_quota import statusline
+        if not args.agy_profile:
+            return 0
+        return statusline(DATA, Path(args.agy_profile))
+    if args.remove_antigravity_capture:
+        from antigravity_quota import remove_all
+        remove_all(DATA)
+        return 0
     if args.recover:
         (DATA / 'collector-restart.signal').write_text('restart')
         return 0

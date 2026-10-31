@@ -1,6 +1,7 @@
 """Settings bridge: receive secrets via stdin, return no private connection values."""
 import json
 import sys
+import copy
 from zoneinfo import ZoneInfo
 from calendars import checked_url
 from cube import host_url
@@ -38,8 +39,19 @@ def validate(values, root=HERE):
 def main():
     try:
         sys.stdin.reconfigure(encoding='utf-8')
-        values = json.load(sys.stdin)
-        save_connection(validate(values))
+        values = validate(json.load(sys.stdin))
+        previous = load_settings()
+        desired = copy.deepcopy(previous)
+        for key in desired:
+            if isinstance(values.get(key), dict):desired[key].update(values[key])
+        from antigravity_quota import sync_capture
+        from app_paths import core_command
+        undo = sync_capture(previous, desired, HERE, core_command())
+        try:
+            save_connection(values)
+        except Exception:
+            for rollback in reversed(undo):rollback()
+            raise
         print('Saved')
     except Exception:
         # Never print exception text: libraries may embed a URL/password in it.
