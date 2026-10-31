@@ -11,7 +11,7 @@ def validate(values, root=HERE):
     current = load_settings(root)
     combined_secrets = dict(load_secrets(root), **{key: value for key, value in values.get('secrets', {}).items() if value})
     claude = dict(current['claude'], **values.get('claude', {}))
-    if claude.get('source') == 'external':
+    if claude.get('enabled') and claude.get('source') == 'external':
         if not isinstance(combined_secrets.get('claude_command'), list) or not combined_secrets['claude_command']:
             raise ValueError('Configure the external Claude reader')
     calendar = dict(current['calendar'], **values.get('calendar', {}))

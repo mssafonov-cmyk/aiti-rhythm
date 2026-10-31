@@ -1,8 +1,8 @@
 # Зависимости и источники
 
-Внешние Python-библиотеки устанавливаются из PyPI по requirements.txt;
-их исходники и бинарные файлы не включены в архив программы. Лицензии
-устанавливаются вместе с пакетами в .venv/Lib/site-packages.
+Setup содержит Python и зависимости из requirements.txt. Метаданные и тексты
+лицензий библиотек включены в каталог _internal установленной программы.
+При запуске из исходников зависимости устанавливаются из PyPI в своё окружение.
 
 - Pillow 13 — MIT-CMU, https://github.com/python-pillow/Pillow
 - icalendar — BSD-2-Clause, https://github.com/collective/icalendar

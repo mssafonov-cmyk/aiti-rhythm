@@ -8,6 +8,18 @@ def event(name):
     return json.dumps(dict(type='event_msg',timestamp='2026-10-26T10:00:00Z',payload=dict(type=name))).encode()+b'\n'
 
 class CacheTest(unittest.TestCase):
+    def test_valid_json_without_newline_is_not_committed(self):
+        with tempfile.TemporaryDirectory() as directory:
+            p=Path(directory)/'session.jsonl'
+            row=event('task_complete')
+            p.write_bytes(row[:-1])
+            self.assertEqual(session_records(p), [])
+            self.assertEqual(_session_cache[p]['offset'], 0)
+            with p.open('ab') as stream:
+                stream.write(b'\n')
+            self.assertEqual(len(session_records(p)), 1)
+            self.assertEqual(len(session_records(p)), 1)
+
     def test_append_partial_and_truncate(self):
         with tempfile.TemporaryDirectory() as directory:
             p=Path(directory)/'session.jsonl'

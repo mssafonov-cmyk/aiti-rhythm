@@ -32,6 +32,8 @@ def session_records(path):
         stream.seek(entry['offset'])
         while stream.tell() < stat.st_size:
             raw = stream.readline(stat.st_size-stream.tell())
+            if not raw.endswith(b'\n'):
+                break
             try: row = json.loads(raw)
             except (ValueError, UnicodeDecodeError):
                 if not raw.endswith(b'\n'): break

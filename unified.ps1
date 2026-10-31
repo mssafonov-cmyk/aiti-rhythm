@@ -12,7 +12,7 @@ function WeeklyRemaining($provider){
  return $null
 }
 function ShowTodayMenu($sender){
- $popup=[Windows.Controls.ContextMenu]::new();$today=[DateTimeOffset]::UtcNow.ToOffset([TimeSpan]::FromHours(3)).Date
+ $popup=[Windows.Controls.ContextMenu]::new();$today=[DateTimeOffset]::Now.Date
  foreach($ev in @($data.calendar.events|Where-Object {(EventTime $_.planned_date).Date -eq $today})){
   $item=[Windows.Controls.MenuItem]::new();$item.Header=(EventTime $ev.planned_date).ToString('HH:mm')+' · '+$ev.subject;$item.Tag=$ev.ref
   $item.Add_Click({param($s,$e) $script:selectedRef=$s.Tag;Draw});[void]$popup.Items.Add($item)

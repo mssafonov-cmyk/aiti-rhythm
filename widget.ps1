@@ -65,13 +65,13 @@ function Fresh($obj,$seconds=600){return ($null -ne $obj -and -not $obj.error -a
 function EventTime($s){
  # Lake timestamps without offset are Moscow wall time, independently of PC timezone.
  if($s -notmatch '(Z|[+-]\d\d:\d\d)$'){$s+='+03:00'}
- return [DateTimeOffset]::Parse($s)
+ return [DateTimeOffset]::Parse($s).ToLocalTime()
 }
 function CalendarFresh{
  try{return ((Fresh $data.calendar 180) -and ((NowSeconds)-(EventTime $data.calendar.synced_at).ToUnixTimeSeconds()) -lt 900)}catch{return $false}
 }
 function NextEvent{
- foreach($ev in $data.calendar.events){if($ev.all_day){continue};$end=(EventTime $ev.planned_date).ToUnixTimeSeconds()+300;if($ev.planned_end){$end=[Math]::Max($end,(EventTime $ev.planned_end).ToUnixTimeSeconds())};if($end -ge (NowSeconds)){return $ev}};return $null
+ foreach($ev in $data.calendar.events){if($ev.all_day){continue};$end=(EventTime $ev.planned_date).ToUnixTimeSeconds()+300;if($end -ge (NowSeconds)){return $ev}};return $null
 }
 function SelectedEvent{
  if($selectedRef){$found=@($data.calendar.events|Where-Object ref -eq $selectedRef);if($found.Count){return $found[0]}}

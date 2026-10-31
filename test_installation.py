@@ -11,6 +11,14 @@ from discovery import discover
 
 
 class InstallationTests(unittest.TestCase):
+    def test_disabled_external_claude_does_not_require_a_command(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory)
+            values={'claude': {'enabled': False, 'source': 'external'}}
+            self.assertEqual(validate(values, root), values)
+            with self.assertRaises(ValueError):
+                validate({'claude': {'enabled': True, 'source': 'external'}}, root)
+
     def test_external_read_uses_utf8_and_never_shell(self):
         completed = subprocess.CompletedProcess([], 0, json.dumps({'source': 'Календарь'}).encode('utf-8'), b'')
         with patch('external_reader.subprocess.run', return_value=completed) as run:

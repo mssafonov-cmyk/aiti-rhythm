@@ -14,6 +14,8 @@ $win.Width=500;$win.Height=800;$win.UpdateLayout();Draw;$win.UpdateLayout();Prev
 if($large -le $small+150){throw 'Session viewport did not expand'}
 $results+=@{checks='unified responsive layout';small=$small;large=$large;passed=$true}
 $now=NowSeconds;$time=[DateTimeOffset]::UtcNow.ToOffset([TimeSpan]::FromHours(3))
+$utcExample='2026-11-02T21:30:00Z'
+if((EventTime $utcExample).ToString('yyyy-MM-dd HH:mm') -ne [DateTimeOffset]::Parse($utcExample).ToLocalTime().ToString('yyyy-MM-dd HH:mm')){throw 'UTC calendar time must display in the local timezone'}
 $script:selectedRef='';$script:data=[pscustomobject]@{
  limits=[pscustomobject]@{checked_at=$now;weekly_pct=0.163;weekly_reset_at=$now+86400}
  claude=[pscustomobject]@{checked_at=$now;limits_at=$now;limits=[pscustomobject]@{seven_day=[pscustomobject]@{used_percentage=100}}}
@@ -21,6 +23,11 @@ $script:selectedRef='';$script:data=[pscustomobject]@{
  calendar=[pscustomobject]@{checked_at=$now;synced_at=$time.ToString('o');events=@([pscustomobject]@{ref='first';subject='Первая встреча';planned_date=$time.AddMinutes(4).ToString('o');telemost_url='https://telemost.360.yandex.ru/j/test'},[pscustomobject]@{ref='second';subject='Вторая встреча';planned_date=$time.AddMinutes(40).ToString('o');telemost_url=''})}
 }
 $win.Width=370;$win.Height=560;$win.UpdateLayout();Draw;$win.UpdateLayout()
+$savedEvents=$data.calendar.events
+$data.calendar.events=@([pscustomobject]@{ref='ongoing';planned_date=$time.AddMinutes(-20).ToString('o');planned_end=$time.AddMinutes(30).ToString('o')},$savedEvents[0])
+if((NextEvent).ref -ne 'first'){throw 'An ongoing meeting must not suppress the next meeting reminder'}
+$data.calendar.events=$savedEvents
+$results+=@{checks='calendar local timezone and upcoming reminder over ongoing meeting';passed=$true}
 if((Control 'CodexRemaining').Text -notmatch '83[.,]7%'){throw ('Precise weekly percentage missing: '+(Control 'CodexRemaining').Text+' raw '+$data.limits.weekly_pct)}
 if((Control 'ClaudeRemaining').Text -notmatch '0%'){throw 'Zero remaining incorrectly treated as missing'}
 if((Control 'SessionList').Content.Children.Count -ne 2){throw 'Completed sessions must be visible by default'}
