@@ -15,6 +15,8 @@ DEFAULTS = {
     'calendar': {'enabled': False, 'kind': 'ical', 'name': '', 'timezone': 'Europe/Moscow',
                  'mapping': {'id': 'id', 'subject': 'subject', 'start': 'start', 'end': 'end', 'url': 'url'}},
     'cube': {'enabled': False, 'host': '', 'rotation': 0, 'show_titles': False},
+    'view': {'calendar': True, 'sessions': True, 'limits': True, 'usage': True,
+             'compact_usage': True, 'auto_height': True},
 }
 
 
@@ -65,6 +67,7 @@ def load_secrets(root=HERE):
 def save_connection(values, root=HERE):
     settings = load_settings(root)
     secrets = load_secrets(root)
+    previous_secrets = copy.deepcopy(secrets)
     for key in settings:
         if isinstance(values.get(key), dict):
             settings[key].update(values[key])
@@ -73,10 +76,11 @@ def save_connection(values, root=HERE):
             secrets[key] = value
     if not settings['calendar']['enabled']:
         secrets = {key: value for key, value in secrets.items() if not key.startswith('calendar_')}
-    protected = base64.b64encode(crypt(json.dumps(secrets).encode('utf-8')))
-    temporary = root / 'connections.sealed.tmp'
-    temporary.write_bytes(protected)
-    temporary.replace(root / 'connections.sealed')
+    if secrets != previous_secrets or not (root / 'connections.sealed').exists():
+        protected = base64.b64encode(crypt(json.dumps(secrets).encode('utf-8')))
+        temporary = root / 'connections.sealed.tmp'
+        temporary.write_bytes(protected)
+        temporary.replace(root / 'connections.sealed')
     atomic_json(root / 'connections.json', settings)
     return settings
 

@@ -29,7 +29,17 @@ def read(root, provider, data_root):
         module._claude_limits = previous.get('limits', {})
         module._claude_limits_at = previous.get('limits_at')
         module._claude_last_attempt = previous.get('attempt_at', 0)
-    result = module.claude_remote()
+    from claude_usage import preserve_reset_metadata, with_reset_metadata_source
+    original_ssh = getattr(module, 'ssh', None)
+    if original_ssh:
+        def reader_ssh(host, source, *args, **kwargs):
+            return original_ssh(host, with_reset_metadata_source(source), *args, **kwargs)
+        module.ssh = reader_ssh
+    try:
+        result = preserve_reset_metadata(module.claude_remote)
+    finally:
+        if original_ssh:
+            module.ssh = original_ssh
     from safeio import atomic_json
     atomic_json(cache, {'limits': result.get('limits', {}), 'limits_at': result.get('limits_at'),
                         'attempt_at': module._claude_last_attempt})

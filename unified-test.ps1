@@ -1,4 +1,6 @@
-﻿$win.Show();Tick;$win.UpdateLayout();Draw;$results=@()
+﻿if(-not $data){$script:data=[pscustomobject]@{}}
+$data|Add-Member -NotePropertyName view -NotePropertyValue ([pscustomobject]@{auto_height=$false;compact_usage=$false}) -Force
+$win.Show();Tick;$win.UpdateLayout();Draw;$results=@()
 function FindControl($root,$name){
  if($root -is [Windows.FrameworkElement] -and $root.Name -eq $name){return $root}
  for($i=0;$i -lt [Windows.Media.VisualTreeHelper]::GetChildrenCount($root);$i++){$found=FindControl ([Windows.Media.VisualTreeHelper]::GetChild($root,$i)) $name;if($found){return $found}}
@@ -17,6 +19,7 @@ $now=NowSeconds;$time=[DateTimeOffset]::UtcNow.ToOffset([TimeSpan]::FromHours(3)
 $utcExample='2026-11-02T21:30:00Z'
 if((EventTime $utcExample).ToString('yyyy-MM-dd HH:mm') -ne [DateTimeOffset]::Parse($utcExample).ToLocalTime().ToString('yyyy-MM-dd HH:mm')){throw 'UTC calendar time must display in the local timezone'}
 $script:selectedRef='';$script:data=[pscustomobject]@{
+ view=[pscustomobject]@{auto_height=$false;compact_usage=$false}
  limits=[pscustomobject]@{checked_at=$now;weekly_pct=0.163;weekly_reset_at=$now+86400}
  claude=[pscustomobject]@{checked_at=$now;limits_at=$now;limits=[pscustomobject]@{seven_day=[pscustomobject]@{used_percentage=100}}}
  codex=[pscustomobject]@{checked_at=$now;observed=$true;sessions=@([pscustomobject]@{id='00000000-0000-0000-0000-000000000001';provider='Codex';title='Ожидает ответа';status='waiting';at=$now},[pscustomobject]@{id='00000000-0000-0000-0000-000000000002';provider='Codex';title='Завершённая';status='idle';at=$now})}
@@ -94,7 +97,7 @@ $data.codex.checked_at=$now;$data.claude.checked_at=$now;$data.calendar.checked_
 if($LiveDot.Text){throw 'Warning must disappear after recovery'}
 $results+=@{checks='compact layout; completed settings; red boundaries 61/60/1/0/-60/-61; header stale and recovery';passed=$true}
 # Narrow-width acceptance uses the actual 260-DIP viewport, not scaled text.
-$win.Width=260;$win.Height=600;$script:selectedRef='';$data.codex.checked_at=$now;$data.calendar.checked_at=$now;$data.limits.checked_at=$now
+$win.Width=260;$win.Height=740;$script:selectedRef='';$data.codex.checked_at=$now;$data.calendar.checked_at=$now;$data.limits.checked_at=$now
 $data.limits.weekly_pct=0.163;$script:showDetails=$true;Draw;$win.UpdateLayout();Draw;$win.UpdateLayout()
 if($win.ActualWidth -ne 260){throw 'Minimum width still prevents compact mode'}
 foreach($cardName in @('MeetingCard','SessionsCard','ResourcesCard')){
@@ -120,12 +123,50 @@ if(-not (Control 'MeetingCard')){throw 'Enabled calendar must restore its card'}
 if((MeetingUrl 'https://meet.google.com/abc-defg-hij') -ne 'https://meet.google.com/abc-defg-hij'){throw 'Google Meet link unsupported'}
 if(MeetingUrl 'https://meet.google.com.evil.example/abc-defg-hij'){throw 'Untrusted meeting host accepted'}
 $results+=@{checks='calendar off removes card/gap/warning; calendar on restores; Meet host allowlist';passed=$true}
-$notice=BurnNoticeText ([pscustomobject]@{per_min=1200000;leader_basis='window';leaders=@([pscustomobject]@{title='Разбор клиентской задачи';per_min=850000})})
-if($notice -notmatch 'Сессия Codex: Разбор клиентской задачи' -or $notice -notmatch 'Её расход: 850[.,]0K ток/мин'){throw 'Token alert must name the session and its own rate'}
+$balloonNotice=BurnNoticeText ([pscustomobject]@{per_min=1200000;leader_basis='window';leaders=@([pscustomobject]@{title='Разбор клиентской задачи';per_min=850000})})
+if($balloonNotice -notmatch 'Сессия Codex: Разбор клиентской задачи' -or $balloonNotice -notmatch 'Её расход: 850[.,]0K ток/мин'){throw 'Token alert must name the session and its own rate'}
 $unknown=BurnNoticeText ([pscustomobject]@{per_min=100000;leaders=@()})
 if($unknown -notmatch 'Сессию определить не удалось'){throw 'Token alert must not invent a session'}
 $long=BurnNoticeText ([pscustomobject]@{per_min=100000;leader_basis='day';leaders=@([pscustomobject]@{title=('Длинное название '*20);day_tokens=2000000})})
 if($long.Length -gt 240 -or $long -notmatch 'За день: 2[.,]0M токенов'){throw 'Long titles must fit the alert without confusing daily total with rate'}
 $results+=@{checks='token balloon identifies session and rate; honest missing session; bounded long title; correct daily units';passed=$true}
+# Independent quota windows, real reset metadata and every visibility combination.
+$script:showDetails=$false;$data.codex.burn.alert=$false;$script:selectedRef=''
+$data.claude.checked_at=$now;$data.claude.limits_at=$now;$data.limits.checked_at=$now
+$data.claude.limits|Add-Member -NotePropertyName five_hour -NotePropertyValue ([pscustomobject]@{used_percentage=100;resets_at=$time.AddHours(1).ToString('o')}) -Force
+$data.limits|Add-Member -NotePropertyName session_pct -NotePropertyValue 0.4 -Force
+$data.view=[pscustomobject]@{calendar=$true;sessions=$true;limits=$true;usage=$true;compact_usage=$true;auto_height=$true}
+Draw;$win.UpdateLayout();Draw;$win.UpdateLayout()
+if((Control 'ClaudeFiveHour').Value -ne 0 -or (Control 'ClaudeFiveHour').Opacity -ne 1){throw 'An exhausted 5-hour quota is a known zero, not missing data'}
+if($script:cardSignals['ResourcesCard'].key -notmatch 'Claude5h'){throw 'An exhausted 5-hour window must signal independently of the weekly window'}
+if((Control 'CodexFiveHour').Value -ne 60){throw 'Codex short and weekly windows must be independent'}
+if((Control 'ClaudeReset').Text -ne 'Дата не передана'){throw 'Missing weekly reset must not be inferred from utilization'}
+$data.claude.limits.seven_day|Add-Member -NotePropertyName resets_at -NotePropertyValue $time.AddDays(3).ToString('o') -Force
+Draw;$win.UpdateLayout()
+if((Control 'ClaudeReset').Text -notmatch '^до '){throw 'Reported weekly reset was discarded'}
+foreach($width in @(260,380)){
+ $win.Width=$width
+ for($mask=0;$mask -lt 16;$mask++){
+  $data.view.calendar=[bool]($mask-band 1);$data.view.sessions=[bool]($mask-band 2);$data.view.limits=[bool]($mask-band 4);$data.view.usage=[bool]($mask-band 8)
+  Draw;$win.UpdateLayout();Draw;$win.UpdateLayout()
+  foreach($item in @(@('MeetingCard',$data.view.calendar),@('SessionsCard',$data.view.sessions),@('ResourcesCard',($data.view.limits-or $data.view.usage)),@('TokenRate',$data.view.usage),@('ClaudeRemaining',$data.view.limits))){
+   if([bool](Control $item[0]) -ne $item[1]){throw ('Wrong block visibility '+$item[0]+' mask '+$mask)}
+  }
+  $bottom=0
+  foreach($name in @('MeetingCard','SessionsCard','ResourcesCard')){
+   $card=Control $name;if(-not $card){continue};$top=[Windows.Controls.Canvas]::GetTop($card)
+   if($top -lt $bottom){throw ('Overlapping compact cards mask '+$mask)}
+   if($card.ActualWidth -gt $Body.ActualWidth+1){throw 'Compact card exceeds viewport width'}
+   $bottom=$top+$card.ActualHeight
+  }
+  if($bottom -gt $Body.ActualHeight+1){Preview 'rhythm-layout-failure.png';throw ('Automatic height clips content mask '+$mask+' height '+$win.Height+' actual '+$win.ActualHeight+' bottom '+$bottom+' body '+$Body.ActualHeight+' footer '+$Foot.ActualHeight)}
+  if($mask -eq 0 -and $win.Height -gt 100){throw 'All blocks hidden must leave a compact header'}
+  if($width -eq 260 -and $mask -in @(4,6,14,15)){Preview ('rhythm-view-'+$mask+'.png')}
+ }
+}
+$data.view.calendar=$false;$data.view.sessions=$true;$data.view.limits=$true;$data.view.usage=$true
+Draw;$win.UpdateLayout();Preview 'rhythm-compact-default.png'
+$results+=@{checks='32 visibility/width combinations; automatic height; no clipping; independently exhausted 5-hour quota; reset dates; header-only mode';passed=$true}
+
 $results|ConvertTo-Json|Set-Content -LiteralPath (Join-Path $root 'widget-test.json') -Encoding UTF8
 $script:closing=$true;$win.Close()

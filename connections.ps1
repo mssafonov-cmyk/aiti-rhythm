@@ -41,13 +41,32 @@ Add-Type -AssemblyName PresentationFramework,PresentationCore,WindowsBase
     <Button x:Name="Close" Grid.Column="1" Content="×" Background="Transparent" BorderThickness="0" Padding="0" FontSize="20" ToolTip="Закрыть без сохранения"/>
    </Grid>
    <StackPanel Grid.Row="1" Margin="0,18,0,18"><TextBlock Text="Ваш рабочий ритм" FontSize="25" FontWeight="SemiBold"/><TextBlock Text="Подключите свои инструменты. Остальное — по желанию." Style="{StaticResource Hint}" Margin="0,5,0,0"/></StackPanel>
-   <Border Grid.Row="2" Background="#11171F" CornerRadius="10" Padding="3" Margin="0,0,0,18"><UniformGrid Columns="4">
+   <Border Grid.Row="2" Background="#11171F" CornerRadius="10" Padding="3" Margin="0,0,0,18"><UniformGrid Columns="5">
     <RadioButton x:Name="NavCodex" GroupName="Pages" Content="Codex" Tag="Codex" IsChecked="True"/>
     <RadioButton x:Name="NavClaude" GroupName="Pages" Content="Claude" Tag="Claude"/>
     <RadioButton x:Name="NavCalendar" GroupName="Pages" Content="Календарь" Tag="Calendar"/>
     <RadioButton x:Name="NavCube" GroupName="Pages" Content="Кубик" Tag="Cube"/>
+    <RadioButton x:Name="NavView" GroupName="Pages" Content="Вид" Tag="View"/>
    </UniformGrid></Border>
    <ScrollViewer x:Name="PageScroll" Grid.Row="3" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Padding="0,0,9,0" Focusable="False"><Grid>
+    <StackPanel x:Name="PageView" Visibility="Collapsed">
+     <Border Style="{StaticResource Card}"><StackPanel>
+      <TextBlock Text="БЛОКИ ПАНЕЛИ" Foreground="#56D8F1" FontSize="11" FontWeight="SemiBold"/>
+      <TextBlock Text="Оставьте то, что нужно" FontSize="17" FontWeight="SemiBold" Margin="0,12,0,8"/>
+      <TextBlock Text="Скрытие блока сохраняет подключение и доступы. Кубик продолжает работать независимо от вида панели." Style="{StaticResource Hint}"/>
+      <CheckBox x:Name="ViewCalendar" Content="Календарь и ближайшая встреча" Margin="0,20,0,14"/>
+      <CheckBox x:Name="ViewSessions" Content="Список сессий" Margin="0,0,0,14"/>
+      <CheckBox x:Name="ViewLimits" Content="Лимиты · неделя и 5 часов" Margin="0,0,0,14"/>
+      <CheckBox x:Name="ViewUsage" Content="Расход токенов"/>
+      <TextBlock Text="Без подключённого календаря его карточка не появляется." Style="{StaticResource Hint}" FontSize="11" Margin="0,16,0,0"/>
+     </StackPanel></Border>
+     <Border Style="{StaticResource Card}"><StackPanel>
+      <TextBlock Text="КОМПАКТНОСТЬ" Foreground="#94A7BF" FontSize="11" FontWeight="SemiBold"/>
+      <CheckBox x:Name="ViewCompactUsage" Content="Показывать расход компактной строкой" Margin="0,16,0,16"/>
+      <CheckBox x:Name="ViewAutoHeight" Content="Подбирать высоту под видимые блоки"/>
+      <TextBlock Text="Можно скрыть всё: останется заголовок с настройками. Ширина уменьшается до 260." Style="{StaticResource Hint}" FontSize="11" Margin="0,14,0,0"/>
+     </StackPanel></Border>
+    </StackPanel>
     <StackPanel x:Name="PageCodex">
      <Border Style="{StaticResource Card}"><StackPanel>
       <TextBlock Text="CODEX" Foreground="#56D8F1" FontSize="11" FontWeight="SemiBold"/>
@@ -80,7 +99,7 @@ Add-Type -AssemblyName PresentationFramework,PresentationCore,WindowsBase
     <StackPanel x:Name="PageCalendar" Visibility="Collapsed">
      <Border Style="{StaticResource Card}"><StackPanel>
       <TextBlock Text="КАЛЕНДАРЬ · ПО ЖЕЛАНИЮ" Foreground="#99ADA9" FontSize="11" FontWeight="SemiBold"/>
-      <CheckBox x:Name="Calendar" Content="Показывать мои встречи" FontSize="16" FontWeight="SemiBold" Margin="0,15,0,12"/>
+      <CheckBox x:Name="Calendar" Content="Подключить мой календарь" FontSize="16" FontWeight="SemiBold" Margin="0,15,0,12"/>
       <TextBlock Text="Ближайшая встреча и напоминания в панели. Только чтение — Ритм не меняет события." Style="{StaticResource Hint}"/>
       <StackPanel x:Name="CalendarFields">
        <TextBlock Text="Способ подключения" Style="{StaticResource Caption}"/><ComboBox x:Name="Kind"><ComboBoxItem Content="Google / Яндекс / другой iCal" Tag="ical"/><ComboBoxItem Content="Яндекс / другой CalDAV" Tag="caldav"/><ComboBoxItem Content="1С / другая публикация OData" Tag="odata"/><ComboBoxItem Content="Внешний сборщик JSON" Tag="external"/></ComboBox>
@@ -130,6 +149,8 @@ Add-Type -AssemblyName PresentationFramework,PresentationCore,WindowsBase
 '@
 $window=[Windows.Markup.XamlReader]::Load([Xml.XmlNodeReader]::new($xaml))
 $controls=@{};foreach($name in @('ClaudeSource','ClaudeCommand','CalendarCommand','Codex','CodexHome','CodexExe','Limits','Claude','ClaudeHome','Calendar','Kind','CalendarName','Timezone','CalendarUrl','Username','Password','Mapping','Cube','CubeHost','Rotation','Titles','Save','Cancel','Status')){$controls[$name]=$window.FindName($name)}
+$viewControls=@{calendar='ViewCalendar';sessions='ViewSessions';limits='ViewLimits';usage='ViewUsage';compact_usage='ViewCompactUsage';auto_height='ViewAutoHeight'}
+foreach($name in $viewControls.Values){$controls[$name]=$window.FindName($name)}
 $icon=Join-Path $PSScriptRoot 'indicators.ico'
 if(Test-Path -LiteralPath $icon){$window.Icon=[Windows.Media.Imaging.BitmapFrame]::Create([Uri]$icon);$window.FindName('AppIcon').Source=$window.Icon}
 $window.MaxHeight=[Windows.SystemParameters]::WorkArea.Height-24
@@ -139,10 +160,10 @@ $window.MinWidth=[Math]::Min($window.MinWidth,$window.MaxWidth);$window.Width=[M
 $window.FindName('DragBar').Add_MouseLeftButtonDown({$bar=$window.FindName('DragBar');if($_.GetPosition($bar).X -lt ($bar.ActualWidth-38)){$window.DragMove()}})
 $window.FindName('Close').Add_Click({$window.Close()})
 function SelectConnectionPage($page){
- foreach($name in @('Codex','Claude','Calendar','Cube')){$window.FindName('Page'+$name).Visibility=if($name -eq $page){'Visible'}else{'Collapsed'}}
+ foreach($name in @('Codex','Claude','Calendar','Cube','View')){$window.FindName('Page'+$name).Visibility=if($name -eq $page){'Visible'}else{'Collapsed'}}
  $window.FindName('PageScroll').ScrollToTop()
 }
-foreach($name in @('Codex','Claude','Calendar','Cube')){$window.FindName('Nav'+$name).Add_Checked({param($sender,$eventArgs) SelectConnectionPage ([string]$sender.Tag)})}
+foreach($name in @('Codex','Claude','Calendar','Cube','View')){$window.FindName('Nav'+$name).Add_Checked({param($sender,$eventArgs) SelectConnectionPage ([string]$sender.Tag)})}
 function UpdateConnectionFields{
  foreach($name in @('Codex','Claude','Calendar','Cube')){$window.FindName($name+'Fields').Visibility=if($controls[$name].IsChecked){'Visible'}else{'Collapsed'}}
  $external=$controls.ClaudeSource.SelectedItem.Tag -eq 'external'
@@ -165,6 +186,7 @@ $discoveryPath=Join-Path $dataRoot 'discovery.json'
 $window.FindName('DetectionCodex').Text='Журналы будут найдены при запуске панели.';$window.FindName('DetectionClaude').Text='Журналы будут найдены при запуске панели.'
 if(Test-Path -LiteralPath $discoveryPath){$found=Get-Content -LiteralPath $discoveryPath -Raw -Encoding UTF8|ConvertFrom-Json;$codexFound=if($found.codex_journals){'Журналы Codex найдены на этом компьютере.'}elseif($found.codex_installed){'Codex установлен. Запустите первую сессию.'}else{'Codex пока не найден.'};$claudeFound=if($found.claude_external){'Настроен внешний источник сессий Claude.'}elseif($found.claude_journals){'Журналы Claude Code найдены на этом компьютере.'}elseif($found.claude_installed){'Claude Code установлен. Запустите первую сессию.'}else{'Claude Code пока не найден.'};$window.FindName('DetectionCodex').Text=$codexFound;$window.FindName('DetectionClaude').Text=$claudeFound}
 if(Test-Path -LiteralPath $configPath){$config=Get-Content -LiteralPath $configPath -Raw -Encoding UTF8|ConvertFrom-Json}else{$config=$null}
+foreach($key in $viewControls.Keys){$controls[$viewControls[$key]].IsChecked=if($null -ne $config.view.$key){[bool]$config.view.$key}else{$true}}
 $controls.Codex.IsChecked=if($config){[bool]$config.codex.enabled}else{$true};$controls.Limits.IsChecked=if($config){[bool]$config.codex.limits}else{$true}
 $controls.Claude.IsChecked=if($config){[bool]$config.claude.enabled}else{$true};$controls.Calendar.IsChecked=[bool]$config.calendar.enabled;$controls.Cube.IsChecked=[bool]$config.cube.enabled
 $controls.CodexHome.Text=[string]$config.codex.home;$controls.CodexExe.Text=[string]$config.codex.executable;$controls.ClaudeHome.Text=[string]$config.claude.home
@@ -185,6 +207,7 @@ $controls.Save.Add_Click({
    claude=@{enabled=[bool]$controls.Claude.IsChecked;home=$controls.ClaudeHome.Text.Trim();source=[string]$controls.ClaudeSource.SelectedItem.Tag}
    calendar=@{enabled=[bool]$controls.Calendar.IsChecked;kind=[string]$controls.Kind.SelectedItem.Tag;name=$controls.CalendarName.Text.Trim();timezone=$controls.Timezone.Text.Trim();mapping=$(if($controls.Calendar.IsChecked -and $controls.Kind.SelectedItem.Tag -eq 'odata'){$controls.Mapping.Text|ConvertFrom-Json}else{$initialMapping})}
    cube=@{enabled=[bool]$controls.Cube.IsChecked;host=$controls.CubeHost.Text.Trim();rotation=[int][string]$controls.Rotation.SelectedItem.Content;show_titles=[bool]$controls.Titles.IsChecked}
+   view=@{calendar=[bool]$controls.ViewCalendar.IsChecked;sessions=[bool]$controls.ViewSessions.IsChecked;limits=[bool]$controls.ViewLimits.IsChecked;usage=[bool]$controls.ViewUsage.IsChecked;compact_usage=[bool]$controls.ViewCompactUsage.IsChecked;auto_height=[bool]$controls.ViewAutoHeight.IsChecked}
    secrets=@{claude_command=$(if($controls.ClaudeCommand.Password){ConvertFrom-Json -InputObject $controls.ClaudeCommand.Password}else{$null});calendar_command=$(if($controls.CalendarCommand.Password){ConvertFrom-Json -InputObject $controls.CalendarCommand.Password}else{$null});calendar_url=$controls.CalendarUrl.Password.Trim();calendar_username=$controls.Username.Text.Trim();calendar_password=$controls.Password.Password}
   }
   $python=$env:RHYTHM_CORE_EXE
@@ -197,6 +220,7 @@ $controls.Save.Add_Click({
 if($ValidateOnly){Write-Output 'Connections dialog parsed; no secrets read or settings changed.'}
 elseif($SelfTest){
  if(-not $config -and ($controls.Calendar.IsChecked -or $controls.Cube.IsChecked)){throw 'Optional connections must default to off'}
+ if(-not $config){foreach($name in $viewControls.Values){if(-not $controls[$name].IsChecked){throw 'New view controls must default to enabled'}}}
  if($window.FindName('CubeLink').NavigateUri.AbsoluteUri -ne 'https://geekmagic.com/'){throw 'Unexpected cube link'}
  $window.Show();$window.UpdateLayout()
  function SaveSettingsPreview($name){
@@ -205,12 +229,13 @@ elseif($SelfTest){
   $bitmap.Render($window);$encoder=[Windows.Media.Imaging.PngBitmapEncoder]::new();$encoder.Frames.Add([Windows.Media.Imaging.BitmapFrame]::Create($bitmap))
   $file=[IO.File]::Create((Join-Path $dataRoot ('settings-'+$name+'.png')));try{$encoder.Save($file)}finally{$file.Dispose()}
  }
- foreach($name in @('Codex','Claude','Calendar','Cube')){
+ foreach($name in @('Codex','Claude','Calendar','Cube','View')){
   $window.FindName('Nav'+$name).IsChecked=$true
-  foreach($other in @('Codex','Claude','Calendar','Cube')){if(($window.FindName('Page'+$other).Visibility -eq 'Visible') -ne ($name -eq $other)){throw 'Section navigation failed'}}
+  foreach($other in @('Codex','Claude','Calendar','Cube','View')){if(($window.FindName('Page'+$other).Visibility -eq 'Visible') -ne ($name -eq $other)){throw 'Section navigation failed'}}
   SaveSettingsPreview $name
  }
  if($window.FindName('CubeFields').Visibility -ne 'Collapsed'){throw 'Disabled cube fields must be hidden'}
+ $window.FindName('NavCube').IsChecked=$true
  if(-not $window.FindName('CubeLink').Parent.IsVisible){throw 'Cube link must stay visible while output is off'}
  $controls.Cube.IsChecked=$true;if($window.FindName('CubeFields').Visibility -ne 'Visible'){throw 'Enabled cube fields missing'}
  SaveSettingsPreview 'Cube-on';$controls.Cube.IsChecked=$false
@@ -231,7 +256,10 @@ elseif($SelfTest){
  $controls.Cube.IsChecked=$false;$controls.CubeHost.Text=''
  # Hidden OData text must not prevent saving an unrelated/disabled connection.
  $controls.Mapping.Text='not-json'
+ $controls.ViewCalendar.IsChecked=$false;$controls.ViewSessions.IsChecked=$false;$controls.ViewUsage.IsChecked=$false
  $controls.Save.RaiseEvent([Windows.RoutedEventArgs]::new([Windows.Controls.Primitives.ButtonBase]::ClickEvent))
  if($controls.Status.Text -or -not (Test-Path -LiteralPath $configPath)){throw 'Settings save bridge failed'}
+ $saved=Get-Content -LiteralPath $configPath -Raw -Encoding UTF8|ConvertFrom-Json
+ if($saved.view.calendar -or $saved.view.sessions -or $saved.view.usage -or -not $saved.view.limits){throw 'Visibility switches did not round-trip through the settings bridge'}
  Write-Output 'Settings theme, navigation, optional defaults, source fields, inline error, previews and isolated save bridge passed.'
 }else{[void]$window.ShowDialog()}

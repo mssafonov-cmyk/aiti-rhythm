@@ -11,6 +11,63 @@ function WeeklyRemaining($provider){
  }
  return $null
 }
+function ViewOption($name){
+ if($null -ne $data.view.$name){return [bool]$data.view.$name};return $true
+}
+function FiveHourRemaining($provider){
+ if($provider -eq 'Codex'){
+  if((Fresh $data.limits) -and $null -ne $data.limits.session_pct){return [Math]::Max(0,[Math]::Min(100,100*(1-[double]$data.limits.session_pct)))}
+ }elseif((Fresh $data.claude) -and $data.claude.limits_at -and (NowSeconds)-$data.claude.limits_at -lt 600 -and $null -ne $data.claude.limits.five_hour.used_percentage){
+  return [Math]::Max(0,[Math]::Min(100,100-[double]$data.claude.limits.five_hour.used_percentage))
+ };return $null
+}
+function QuotaReset($provider,$window){
+ try{
+  if($provider -eq 'Codex'){$stamp=if($window -eq 'weekly'){$data.limits.weekly_reset_at}else{$data.limits.session_reset_at};if($stamp){return [DateTimeOffset]::FromUnixTimeSeconds([long]$stamp).ToLocalTime()}}
+  else{$stamp=if($window -eq 'weekly'){$data.claude.limits.seven_day.resets_at}else{$data.claude.limits.five_hour.resets_at};if($stamp){return EventTime $stamp}}
+ }catch{};return $null
+}
+function DrawQuota($c,$narrow){
+ $w=$c.Width;CardHeading $c 'ЛИМИТЫ' 'Остаток'
+ $gap=if($narrow){16}else{24};$half=($w-$gap)/2;$shift=if($narrow){24}else{0}
+ for($i=0;$i -lt 2;$i++){
+  $provider=@('Codex','Claude')[$i];$left=WeeklyRemaining $provider;$short=FiveHourRemaining $provider;$x=$i*($half+$gap)
+  Put $c (Label $provider 11 '#939DA7') $x 24
+  $value=Label $(if($null -eq $left){'—'}else{'{0:0.#}%' -f $left}) 22 $(if($null -ne $left -and $left -le 15){'#E6B66B'}else{'#E5E8EB'})
+  $value.Name=$provider+'Remaining';$value.FontFamily='Bahnschrift';$value.Width=if($narrow){$half}else{$half-43};$value.TextAlignment=if($narrow){'Left'}else{'Right'}
+  $value.ToolTip=if($null -eq $left){'Недельная квота недоступна в выбранном источнике.'}else{'Остаток недельной квоты '+$provider}
+  Put $c $value $(if($narrow){$x}else{$x+43}) $(if($narrow){40}else{18})
+  Put $c (Label 'Неделя' 9 '#939DA7') $x (44+$shift)
+  $week=[Windows.Controls.ProgressBar]::new();$week.Name=$provider+'WeekBar';$week.Width=$half;$week.Height=3;$week.Maximum=100;$week.Value=if($null -eq $left){0}else{$left};$week.Foreground=Brush '#A8BECD';$week.Background=Brush '#343D47';$week.BorderThickness=0;$week.Opacity=if($null -eq $left){0.35}else{1};Put $c $week $x (58+$shift)
+  $shortLabel=Label $(if($null -eq $short){'5 ч · —'}else{'5 ч'}) 9 '#939DA7';$shortLabel.Width=38;Put $c $shortLabel $x (69+$shift)
+  $bar=[Windows.Controls.ProgressBar]::new();$bar.Name=$provider+'FiveHour';$bar.Width=$half-40;$bar.Height=3;$bar.Maximum=100;$bar.Value=if($null -eq $short){0}else{$short};$bar.Foreground=Brush $(if($null -ne $short -and $short -le 15){'#E6B66B'}else{'#99ADA9'});$bar.Background=Brush '#343D47';$bar.BorderThickness=0;$bar.Opacity=if($null -eq $short){0.35}else{1}
+  $shortReset=QuotaReset $provider 'session';$bar.ToolTip=if($null -eq $short){'Источник не передал пятичасовую квоту.'}else{('5 часов · остаток {0:0.#}%' -f $short)+$(if($shortReset){' · сброс '+$shortReset.ToString('dd.MM HH:mm')}else{' · дата сброса не передана'})};$shortLabel.ToolTip=$bar.ToolTip;Put $c $bar ($x+40) (74+$shift)
+  $reset=QuotaReset $provider 'weekly'
+  $text=if($null -eq $left){'Квота недоступна'}elseif($reset){'до '+$reset.ToString('dd.MM HH:mm')}else{'Дата не передана'}
+  $label=Label $text 9 '#939DA7';$label.Name=$provider+'Reset';$label.Width=$half;$label.ToolTip=if($reset){'Сброс недельной квоты: '+$reset.ToString('dd.MM.yyyy HH:mm')}else{'Источник передал расход, но не передал дату сброса недельной квоты.'};Put $c $label $x (88+$shift)
+ }
+}
+function DrawUsage($c,$y,$compact,$narrow){
+ $w=$c.Width;$burn=$data.codex.burn;$valid=(Fresh $data.codex 180) -and $data.codex.observed;$hot=$valid -and $burn.alert
+ $minutes=if($burn.window_seconds){[int]($burn.window_seconds/60)}else{15};$color=if($hot){'#E6B66B'}else{'#E5E8EB'}
+ $rate=Label $(if($valid){(Num $burn.per_min)+' ток/мин'}else{'Нет свежих данных'}) $(if($compact){13}else{16}) $color;$rate.Name='TokenRate';$rate.FontFamily='Bahnschrift';$rate.Width=$w-30;Put $c $rate 0 ($y+2)
+ $hint=if(-not $valid){'Расход неизвестен'}elseif($burn.level -eq 'idle'){'Простой · '+$minutes+' мин'}elseif($null -eq $burn.baseline_per_min){'Мало истории · '+$minutes+' мин'}else{'×'+$burn.ratio+' · за '+$minutes+' мин'}
+ $caption=Label $hint 10 '#939DA7';$caption.Width=$w-30;Put $c $caption 0 ($y+25)
+ $more=FlatButton $(if($showDetails){'⌃'}else{'›'}) 25 {$script:showDetails=-not $showDetails;Draw};$more.Name='DetailsToggle';$more.Height=24;$more.ToolTip='Расход за день и сессии';Put $c $more ($w-25) $y
+ if(-not $compact){
+  $bars=@($burn.series);$peak=($bars|Measure-Object per_min -Maximum).Maximum
+  if($valid -and $bars.Count){$spark=[Windows.Shapes.Polyline]::new();$spark.Stroke=Brush '#939DA7';$spark.StrokeThickness=1.2;for($j=0;$j -lt $bars.Count;$j++){$v=if($peak -gt 0){24*$bars[$j].per_min/$peak}else{0};[void]$spark.Points.Add([Windows.Point]::new(($w-2)*$j/[Math]::Max(1,$bars.Count-1),26-$v))};Put $c $spark 0 ($y+44)}
+ }
+ if($hot -or $showDetails){
+  $start=$y+$(if($compact){45}else{80});Divider $c $start
+  $label=Label $(if($hot){'↑ Расход выше обычного'}else{'Расход за день и сессии'}) 10 $(if($hot){'#E6B66B'}else{'#939DA7'});$label.Width=$w;Put $c $label 0 ($start+8)
+  $leaders=@($burn.leaders|Select-Object -First 1)
+  if($valid -and $leaders.Count){$lead=$leaders[0];$row=FlatButton '' $w {param($s,$e) OpenSession $s.Tag};$row.Name='TokenLeader';$row.Tag=$lead.id;$row.ToolTip=$lead.title;$row.Height=21;$label=Label ('№1 '+$(if($burn.leader_basis -eq 'day'){(Num $lead.day_tokens)+' за день'}else{(Num $lead.per_min)+'/мин'})+' · '+$lead.title+' ↗') 10 '#BFB7A8';$label.Width=$w;$row.Content=$label;Put $c $row 0 ($start+27)}
+  $codexDay=if((Fresh $data.codex 180) -and $data.codex.tokens){Num ($data.codex.tokens.input+$data.codex.tokens.output)}else{'—'};$claudeDay=if((Fresh $data.claude 180) -and $data.claude.tokens){Num ($data.claude.tokens.input+$data.claude.tokens.output)}else{'—'}
+  $daily=Label ('За день · Codex '+$codexDay+' · Claude '+$claudeDay) 10 '#939DA7';$daily.Name='DailyProviderTotals';$daily.Width=$w;$daily.ToolTip=$daily.Text+' токенов с учётом кэша';Put $c $daily 0 ($start+51)
+ }
+}
+
 function ShowTodayMenu($sender){
  $popup=[Windows.Controls.ContextMenu]::new();$today=[DateTimeOffset]::Now.Date
  foreach($ev in @($data.calendar.events|Where-Object {(EventTime $_.planned_date).Date -eq $today})){
@@ -46,8 +103,8 @@ function CardSignal($border,$key){
 function UpdateCardSignals{
  $event=SelectedEvent;$delta=if($event){(EventTime $event.planned_date).ToUnixTimeSeconds()-(NowSeconds)}else{999999}
  $meetingKey=if((CalendarFresh) -and $delta -gt 0 -and $delta -le 300){'meeting:'+$event.ref}else{''}
- $low=@();foreach($provider in @('Codex','Claude')){$left=WeeklyRemaining $provider;if($null -ne $left -and $left -le 5){$low+=$provider}}
- $burnKey=if((Fresh $data.codex 180) -and $data.codex.burn.alert){'burn:'+(@($data.codex.burn.leaders)[0].id)}else{''}
+ $low=@();if(ViewOption 'limits'){foreach($provider in @('Codex','Claude')){$left=WeeklyRemaining $provider;if($null -ne $left -and $left -le 5){$low+=$provider};$short=FiveHourRemaining $provider;if($null -ne $short -and $short -le 5){$low+=($provider+'5h')}}}
+ $burnKey=if((ViewOption 'usage') -and (Fresh $data.codex 180) -and $data.codex.burn.alert){'burn:'+(@($data.codex.burn.leaders)[0].id)}else{''}
  CardSignal $script:meetingBorder $meetingKey;CardSignal $script:resourceBorder ($burnKey+($low -join ','))
  if($script:meetingBorder){
   $red=(CalendarFresh) -and $event -and -not $event.all_day -and $delta -le 60 -and $delta -ge -60
@@ -75,15 +132,30 @@ function RecoverCollector{
  $script:noticeAt=Get-Date;Draw
 }
 function CalendarVisible{
- if($null -ne $data.calendar.enabled){return [bool]$data.calendar.enabled};return $true
+ if(-not (ViewOption 'calendar')){return $false};if($null -ne $data.calendar.enabled){return [bool]$data.calendar.enabled};return $true
 }
 function DrawUnified{
  $offset=if($script:sessionScroll){$script:sessionScroll.VerticalOffset}else{0}
- $Body.Children.Clear();$rootCanvas=[Windows.Controls.Canvas]::new();$rootCanvas.Width=[Math]::Max(230,$Body.ActualWidth);$rootCanvas.Height=[Math]::Max(470,$Body.ActualHeight);$rootCanvas.ClipToBounds=$true
+ $Body.Children.Clear();$rootCanvas=[Windows.Controls.Canvas]::new();$rootCanvas.Width=[Math]::Max(230,$Body.ActualWidth);$rootCanvas.Height=[Math]::Max(0,$Body.ActualHeight);$rootCanvas.ClipToBounds=$true
  $view=[Windows.Controls.Border]::new();$outer=[Windows.Controls.ScrollViewer]::new();$outer.VerticalScrollBarVisibility='Hidden';$outer.HorizontalScrollBarVisibility='Disabled';$outer.Content=$rootCanvas;$view.Child=$outer;[void]$Body.Children.Add($view)
  $stale=CollectorStale;$bannerHeight=0
  $h=$rootCanvas.Height-$bannerHeight;$ev=SelectedEvent;$nearest=NextEvent;$burn=$data.codex.burn;$valid=(Fresh $data.codex 180) -and $data.codex.observed;$hot=$valid -and $burn.alert
- $calendarVisible=CalendarVisible;$meetingGap=if($calendarVisible){10}else{0};$cardGaps=10+$meetingGap;$extra=1;$meetingHeight=if($calendarVisible){130}else{0};$narrow=$rootCanvas.Width -lt 300;$resourceHeight=174+$(if($narrow){36}else{0})+$(if($hot -or $showDetails){80}else{0});$h=[Math]::Max($h,$meetingHeight+$resourceHeight+134);$rootCanvas.Height=$h+$bannerHeight;$sessionHeight=$h-$meetingHeight-$resourceHeight-$cardGaps
+ $calendarVisible=CalendarVisible;$sessionsVisible=ViewOption 'sessions';$limitsVisible=ViewOption 'limits';$usageVisible=ViewOption 'usage';$compactUsage=ViewOption 'compact_usage';$automatic=ViewOption 'auto_height'
+ $narrow=$rootCanvas.Width -lt 300;$meetingHeight=if($calendarVisible){130}else{0}
+ $quotaHeight=if($limitsVisible){$(if($narrow){125}else{101})}else{0}
+ $usageHeight=if($usageVisible){$(if($compactUsage){40}else{76})+$(if($hot -or $showDetails){80}else{0})}else{0}
+ $resourceHeight=if($limitsVisible -or $usageVisible){26+$quotaHeight+$usageHeight+$(if($limitsVisible -and $usageVisible){10}else{0})}else{0}
+ $rows=@();foreach($source in @($data.codex,$data.claude)){if(Fresh $source 180){$rows+=@($source.sessions|Where-Object {$null -ne $_ -and ($showCompleted -or $_.status -ne 'idle')})}}
+ $naturalSessions=if($sessionsVisible){$(if($automatic){50+31*[Math]::Min(4,[Math]::Max(1,$rows.Count))}else{134})}else{0}
+ $cards=([int]$calendarVisible)+([int]$sessionsVisible)+([int]($resourceHeight -gt 0));$cardGaps=[Math]::Max(0,($cards-1)*10)
+ $minimum=$meetingHeight+$naturalSessions+$resourceHeight+$cardGaps
+ if($automatic){
+  $h=$minimum;$desired=[Math]::Min($win.MaxHeight,[Math]::Min([Windows.SystemParameters]::WorkArea.Height-24,[Math]::Max(80,$h+56+$(if($notice){14}else{0}))))
+  if([Math]::Abs($win.Height-$desired) -gt 1){$win.Height=$desired}
+ }else{$h=[Math]::Max($rootCanvas.Height,$minimum)}
+ $rootCanvas.Height=$h;$sessionHeight=if($sessionsVisible){$naturalSessions+$(if($automatic){0}else{[Math]::Max(0,$h-$minimum)})}else{0}
+ $meetingGap=if($calendarVisible -and ($sessionsVisible -or $resourceHeight -gt 0)){10}else{0}
+ $extra=1
  $script:meetingBorder=$null
  if($calendarVisible){
  $meeting=Card $rootCanvas 'MeetingCard' $bannerHeight $meetingHeight;$c=$meeting.canvas;$w=$c.Width;$script:meetingBorder=$meeting.border
@@ -112,6 +184,8 @@ function DrawUnified{
  }
  if(-not $future.Count -and -not $selectedRef){Put $c (Label 'Следующих встреч нет' 10 '#939DA7') 0 89}
  }
+ $script:sessionScroll=$null
+ if($sessionsVisible){
  $sessions=Card $rootCanvas 'SessionsCard' ($bannerHeight+$meetingHeight+$meetingGap) $sessionHeight;$c=$sessions.canvas;$w=$c.Width
  $all=@();foreach($source in @($data.codex,$data.claude)){if(Fresh $source 180){$all+=@($source.sessions)}}
  $active=@($all|Where-Object status -ne 'idle'|Sort-Object @{Expression={if($_.status -eq 'waiting'){0}elseif($_.status -eq 'working'){1}else{2}}},@{Expression='at';Descending=$true});$completed=@($all|Where-Object status -eq 'idle'|Sort-Object at -Descending)
@@ -129,42 +203,13 @@ function DrawUnified{
   $row.IsEnabled=$session.provider -eq 'Codex' -and $session.id -match '^[0-9a-f-]{36}$';[void]$stack.Children.Add($row)
  }
  if(-not $display.Count){[void]$stack.Children.Add((Label $(if($stale){'Список сессий устарел'}else{'Нет активных сессий'}) 12 '#939DA7'))};$scroll.ScrollToVerticalOffset($offset)
- $resource=Card $rootCanvas 'ResourcesCard' ($bannerHeight+$h-$resourceHeight) $resourceHeight;$c=$resource.canvas;$w=$c.Width;$script:resourceBorder=$resource.border
- CardHeading $c 'ОСТАТОК НЕДЕЛИ' $(if($narrow){''}else{'Лимиты подписок'})
- $gap=if($narrow){16}else{24};$half=($w-$gap)/2;$detailShift=if($narrow){36}else{0}
- for($i=0;$i -lt 2;$i++){
-  $provider=@('Codex','Claude')[$i];$remaining=WeeklyRemaining $provider;$x=$i*($half+$gap);$accent=if($null -ne $remaining -and $remaining -le 15){'#E6B66B'}else{'#E5E8EB'}
-  Put $c (Label $provider 11 '#939DA7') $x $(if($narrow){24}else{34})
-  $value=if($null -eq $remaining){'—'}else{('{0:0.#}%' -f $remaining)};$label=Label $value 23 $accent;$label.FontFamily='Bahnschrift';$label.Name=$provider+'Remaining';$label.ToolTip=if($provider -eq 'Claude'){'Точная квота Claude недоступна. Сессии и расход читаются из ваших журналов.'}else{'Остаток из Codex app-server, если доступен вашему аккаунту.'};$label.Width=if($narrow){$half}else{$half-43};$label.TextAlignment=if($narrow){'Left'}else{'Right'};Put $c $label $(if($narrow){$x}else{$x+43}) $(if($narrow){41}else{25})
-  if($provider -eq 'Claude' -and $null -ne $remaining){$label.ToolTip='Остаток квоты из выбранного источника Claude.'}
-  $bar=[Windows.Controls.ProgressBar]::new();$bar.Width=$half;$bar.Height=3;$bar.Maximum=100;$bar.Value=if($null -eq $remaining){0}else{$remaining};$bar.Foreground=Brush '#A8BECD';$bar.Background=Brush '#343D47';$bar.BorderThickness=0;Put $c $bar $x $(if($narrow){70}else{59})
-  $reset=$null;try{if($provider -eq 'Codex' -and $data.limits.weekly_reset_at){$reset=[DateTimeOffset]::FromUnixTimeSeconds([long]$data.limits.weekly_reset_at)}elseif($provider -eq 'Claude' -and $data.claude.limits.seven_day.resets_at){$reset=EventTime $data.claude.limits.seven_day.resets_at}}catch{}
-  $resetText=if($null -eq $remaining){'Квота недоступна'}elseif($reset){'Обновится '+$reset.ToOffset([TimeSpan]::FromHours(3)).ToString('dd.MM · HH:mm')}elseif($remaining -eq 0){'Исчерпан · дата неизвестна'}else{'Дата обновления неизвестна'}
-  $label=Label $resetText 9 $(if($null -ne $remaining -and $remaining -eq 0){'#E6B66B'}else{'#939DA7'});$label.Width=$half;$label.ToolTip=$resetText;Put $c $label $x $(if($narrow){79}else{68})
  }
- Divider $c $(if($narrow){102}else{91})
- $minutes=if($burn.window_seconds){[int]($burn.window_seconds/60)}else{15};$color=if($hot){'#E6B66B'}else{'#E5E8EB'}
- $rate=Label $(if($valid){(Num $burn.per_min)+' ток/мин'}else{'Нет свежих данных'}) 16 $color;$rate.FontFamily='Bahnschrift';if($narrow){$rate.Width=$w-50;$rate.ToolTip=$rate.Text};Put $c $rate 0 $(if($narrow){114}else{102})
- $hint=if(-not $valid){'Расход неизвестен'}elseif($burn.level -eq 'idle'){'Простой · '+$minutes+' мин'}elseif($null -eq $burn.baseline_per_min){'Мало истории · '+$minutes+' мин'}else{'×'+$burn.ratio+' · за '+$minutes+' мин'}
- $hintLabel=Label $hint 10 $(if($hot){'#E6B66B'}else{'#939DA7'});$hintLabel.Width=if($narrow){$w}else{118};$hintLabel.TextAlignment=if($narrow){'Left'}else{'Right'};Put $c $hintLabel $(if($narrow){0}else{$w-118}) $(if($narrow){136}else{105})
- $bars=@($burn.series);$peak=($bars|Measure-Object per_min -Maximum).Maximum
- if($valid -and $bars.Count){
-  $spark=[Windows.Shapes.Polyline]::new();$spark.Stroke=Brush $(if($hot){'#E6B66B'}else{'#939DA7'});$spark.StrokeThickness=1.2;$spark.ToolTip='Динамика за день · интервалы 15 мин'
-  for($j=0;$j -lt $bars.Count;$j++){$level=if($peak -gt 0){18*$bars[$j].per_min/$peak}else{0};[void]$spark.Points.Add([Windows.Point]::new(44*$j/[Math]::Max(1,$bars.Count-1),20-$level))};Put $c $spark $(if($narrow){$w-44}else{$w-165}) $(if($narrow){113}else{101})
- }
- $more=FlatButton '' $w {$script:showDetails=-not $showDetails;Draw};$more.Name='DetailsToggle';$more.Height=22;$text=Label ('Расход за день и сессии '+$(if($showDetails){'⌃'}else{'›'})) 10 '#939DA7';$text.Width=$w;$more.Content=$text;Put $c $more 0 (126+$detailShift)
- if($hot -or $showDetails){
-  Divider $c (153+$detailShift)
-  $leader=@($burn.leaders|Select-Object -First 1)
-  $caption=if($hot -and $burn.ratio){'↑ Расход выше обычного в '+$burn.ratio+' раза'}elseif($hot){'↑ Ускорился отдельный сеанс'}else{'День · интервалы 15 мин'}
-  $captionText=Label $caption 10 $(if($hot){'#E6B66B'}else{'#939DA7'});$captionText.Width=$w;$captionText.ToolTip=$caption;Put $c $captionText 0 (161+$detailShift)
-  if($valid -and $leader.Count){$lead=$leader[0];$row=FlatButton '' $w {param($s,$e) OpenSession $s.Tag};$row.Name='TokenLeader';$row.Tag=$lead.id;$row.ToolTip=$lead.title;$row.Height=21;$text=Label ('№1 '+$(if($burn.leader_basis -eq 'day'){(Num $lead.day_tokens)+' за день'}else{(Num $lead.per_min)+'/мин'})+' · '+$lead.title+' ↗') 10 '#BFB7A8';$text.Width=$w;$row.Content=$text;Put $c $row 0 (179+$detailShift)}
-  $codexDay=if((Fresh $data.codex 180) -and $data.codex.tokens){Num ($data.codex.tokens.input+$data.codex.tokens.output)}else{'—'};$claudeDay=if((Fresh $data.claude 180) -and $data.claude.tokens){Num ($data.claude.tokens.input+$data.claude.tokens.output)}else{'—'}
-  $daily=Label ('За день · Codex '+$codexDay+' · Claude '+$claudeDay) 10 '#939DA7';$daily.Name='DailyProviderTotals';$daily.Width=$w;$daily.ToolTip=$daily.Text+' токенов с учетом кэша';Put $c $daily 0 (202+$detailShift)
-  # Detailed daily chart opens in a tooltip, leaving the main card calm.
-  $chart=[Windows.Controls.Canvas]::new();$chart.Width=300;$chart.Height=65;$bars=@($burn.series);$peak=($bars|Measure-Object per_min -Maximum).Maximum
-  if($valid -and $bars.Count){$bw=300.0/$bars.Count;for($j=0;$j -lt $bars.Count;$j++){$bar=$bars[$j];$bh=if($peak -gt 0){[Math]::Max(2.0,60*$bar.per_min/$peak)}else{2};$rect=[Windows.Shapes.Rectangle]::new();$rect.Width=[Math]::Max(1.0,$bw-1);$rect.Height=$bh;$rect.Fill=Brush $(if($bar.level -in @('warning','critical')){'#E6B66B'}else{'#A8BECD'});Put $chart $rect ($j*$bw) (63-$bh)}}
-  $more.ToolTip=$chart
+ $script:resourceBorder=$null
+ if($resourceHeight -gt 0){
+  $resourceY=$meetingHeight+$meetingGap+$sessionHeight+$(if($sessionsVisible){10}else{0})
+  $resource=Card $rootCanvas 'ResourcesCard' $resourceY $resourceHeight;$c=$resource.canvas;$script:resourceBorder=$resource.border
+  if($limitsVisible){DrawQuota $c $narrow}
+  if($usageVisible){$usageY=if($limitsVisible){$quotaHeight+10}else{0};if($limitsVisible){Divider $c ($quotaHeight+3)};DrawUsage $c $usageY $compactUsage $narrow}
  }
  UpdateFreshnessIndicator
  $Foot.Text=$notice;$Foot.Visibility=if($notice){'Visible'}else{'Collapsed'}

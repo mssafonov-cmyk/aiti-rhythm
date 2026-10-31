@@ -5,6 +5,7 @@ import json
 import time
 from burn import velocity, day_series
 from local_metrics import MSK
+from claude_usage import cached_usage
 
 _cache = {}
 
@@ -49,9 +50,11 @@ def claude_local(home, now=None):
     now = time.time() if now is None else now
     day = datetime.fromtimestamp(now, MSK).date()
     sessions, totals, points, messages, seen = [], dict(input=0, output=0, cache=0), [], {}, set()
+    limits, limits_at = cached_usage(home)
     if not (home / 'projects').is_dir():
         return {'checked_at': now, 'sessions': [], 'observed': False, 'tokens': totals,
-                'limits_error': 'not_available', 'status': 'journals_not_found'}
+                **({'limits': limits, 'limits_at': limits_at} if limits else {}),
+                'limits_error': None if limits else 'not_available', 'status': 'journals_not_found'}
     for path in (home / 'projects').rglob('*.jsonl'):
         if path.stat().st_mtime < now - 7 * 86400:
             continue
@@ -88,4 +91,5 @@ def claude_local(home, now=None):
     burn = velocity(points, now)
     burn.update(series=day_series(points, now), leaders=[], alert=False)
     return dict(checked_at=now, sessions=sessions, observed=bool(messages), tokens=totals,
-                burn=burn, limits_error='not_available')
+                burn=burn, **({'limits': limits, 'limits_at': limits_at} if limits else {}),
+                limits_error=None if limits else 'not_available')

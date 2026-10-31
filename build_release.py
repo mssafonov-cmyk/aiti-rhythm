@@ -7,18 +7,18 @@ import re
 import shutil
 import zipfile
 
-VERSION = '1.1.4'
+VERSION = '1.2.0'
 FILES = (
     'README.md', 'PACKAGE-README.txt', 'LICENSE', 'THIRD-PARTY-NOTICES.md', 'SECURITY.md',
     '.gitignore', '.github/workflows/check.yml', 'requirements.txt', 'requirements-build.txt',
     'CONTRIBUTING.md', 'Rhythm.spec', 'installer.iss', 'build_installer.py',
-    'connections.ps1', 'configure.py', 'runtime.py', 'calendars.py', 'cube.py', 'cube_art.py',
+    'connections.ps1', 'configure.py', 'runtime.py', 'calendars.py', 'cube.py', 'cube_art.py', 'claude_usage.py',
     'app_paths.py', 'rhythm_app.py', 'external_reader.py', 'legacy_bridge.py', 'discovery.py',
     'codex_account.py', 'claude_metrics.py', 'collector_service.py', 'local_collector.py',
     'local_metrics.py', 'safeio.py', 'burn.py', 'widget.ps1', 'unified.ps1', 'widget-launch.pyw',
     'indicators.ico', 'unified-test.ps1', 'test_burn.py', 'test_sessions.py', 'test_local_cache.py',
     'test_safeio.py', 'test_connections.py', 'build_release.py',
-    'test_installation.py', 'verify_installer.py',
+    'test_installation.py', 'test_claude_usage.py', 'verify_installer.py',
 )
 
 

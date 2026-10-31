@@ -19,7 +19,7 @@ $script:restorePage=0; $script:notice=''; $script:noticeAt=Get-Date; $script:clo
 $script:colors=@('#56D8F1','#99ADA9','#BAABFF','#FFD374')
 [xml]$xaml=@'
 <Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
- Title="АйТи:Ритм" Width="380" Height="600" MinWidth="260" MinHeight="600" MaxWidth="600" MaxHeight="900"
+ Title="АйТи:Ритм" Width="380" Height="600" MinWidth="260" MinHeight="80" MaxWidth="600" MaxHeight="900"
  WindowStyle="None" AllowsTransparency="True" Background="Transparent" ResizeMode="CanResizeWithGrip" ShowInTaskbar="False" Topmost="True" FontFamily="Segoe UI" Foreground="#EDF4FD">
  <Window.Resources>
   <Style TargetType="Button"><Setter Property="Background" Value="Transparent"/><Setter Property="Foreground" Value="#94A7BF"/><Setter Property="BorderThickness" Value="0"/><Setter Property="Cursor" Value="Hand"/><Setter Property="Padding" Value="5,3"/><Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Button"><Border x:Name="B" CornerRadius="7" Background="{TemplateBinding Background}" Padding="{TemplateBinding Padding}"><ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/></Border><ControlTemplate.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter TargetName="B" Property="Background" Value="#25364A"/><Setter Property="Foreground" Value="White"/></Trigger><Trigger Property="IsEnabled" Value="False"><Setter Property="Opacity" Value="0.55"/></Trigger></ControlTemplate.Triggers></ControlTemplate></Setter.Value></Setter></Style>
@@ -35,7 +35,7 @@ $script:colors=@('#56D8F1','#99ADA9','#BAABFF','#FFD374')
    </Grid>
    <Grid x:Name="Body" Grid.Row="1" Margin="0,3,0,5"/>
    <UniformGrid x:Name="Tabs" Grid.Row="2" Columns="4"/>
-   <TextBlock x:Name="Foot" Grid.Row="3" FontSize="9" Foreground="#8194AD" VerticalAlignment="Bottom" TextTrimming="CharacterEllipsis"/>
+   <TextBlock x:Name="Foot" Grid.Row="3" FontSize="9" MaxHeight="14" Foreground="#8194AD" VerticalAlignment="Bottom" TextTrimming="CharacterEllipsis"/>
   </Grid>
  </Border>
 </Window>
@@ -166,7 +166,7 @@ function MenuItem($text,$handler){$m=[Windows.Controls.MenuItem]::new();$m.Heade
 $script:auto=$false
 $null=MenuItem ('О программе · '+$env:RHYTHM_VERSION) {[void][Windows.MessageBox]::Show(('АйТи:Ритм '+$env:RHYTHM_VERSION+"`nИсходники: "+$env:RHYTHM_BUILD_COMMIT),'АйТи:Ритм')}
 $completedMenu=MenuItem 'Показывать завершённые сессии' {$script:showCompleted=$completedMenu.IsChecked;Draw;SaveState};$completedMenu.IsCheckable=$true;$completedMenu.IsChecked=$showCompleted
-$null=MenuItem 'Подключения Codex, Claude, календаря и кубика…' {
+$null=MenuItem 'Подключения и вид панели…' {
  $dialog=Join-Path $assetRoot 'connections.ps1'
  $power=Join-Path $env:SystemRoot 'System32/WindowsPowerShell/v1.0/powershell.exe'
  Start-Process -FilePath $power -WindowStyle Hidden -ArgumentList @('-NoProfile','-STA','-ExecutionPolicy','Bypass','-File',('"'+$dialog+'"'),'-DataRoot',('"'+$root+'"'))
@@ -196,7 +196,7 @@ $win.Add_Closing({param($s,$e) if(-not $closing -and -not $SelfTest){$e.Cancel=$
 $win.Add_SizeChanged({SaveState})
 $Body.Add_SizeChanged({if($script:data -and -not $script:layoutBusy){$script:layoutBusy=$true;try{Draw}finally{$script:layoutBusy=$false}}})
 try{
- if(Test-Path -LiteralPath $statePath){$s=Get-Content -LiteralPath $statePath -Raw|ConvertFrom-Json;$win.Left=$s.x;$win.Top=$s.y;$win.Width=[Math]::Max(260,[Math]::Min(600,$s.width));$win.Height=[Math]::Max(600,[Math]::Min(900,$s.height));$script:locked=[bool]$s.locked;$win.Topmost=[bool]$s.topmost;$script:auto=[bool]$s.auto;$script:page=[Math]::Max(0,[Math]::Min(3,[int]$s.page));if($null -ne $s.showCompleted){$script:showCompleted=[bool]$s.showCompleted};if($s.alpha){$script:bgAlpha=[int]$s.alpha};if($s.design -ne 2){$win.Height=[Math]::Max(600,$win.Height)}}
+ if(Test-Path -LiteralPath $statePath){$s=Get-Content -LiteralPath $statePath -Raw|ConvertFrom-Json;$win.Left=$s.x;$win.Top=$s.y;$win.Width=[Math]::Max(260,[Math]::Min(600,$s.width));$win.Height=[Math]::Max(80,[Math]::Min(900,$s.height));$script:locked=[bool]$s.locked;$win.Topmost=[bool]$s.topmost;$script:auto=[bool]$s.auto;$script:page=[Math]::Max(0,[Math]::Min(3,[int]$s.page));if($null -ne $s.showCompleted){$script:showCompleted=[bool]$s.showCompleted};if($s.alpha){$script:bgAlpha=[int]$s.alpha};if($s.design -ne 2){$win.Height=[Math]::Max(600,$win.Height)}}
  else{$win.Left=-10000;$win.Top=-10000}
 }catch{$win.Left=-10000;$win.Top=-10000}
 $script:auto=$false;$topMenu.IsChecked=$win.Topmost;$Pin.Content=if($locked){'◆'}else{'◇'};$Shell.Background=Brush ('#{0:X2}151B22' -f $bgAlpha)
@@ -219,7 +219,7 @@ function Tick{
   # Freeze interactive controls under the pointer; explicit clicks redraw immediately.
   if($Body.Children.Count -eq 0 -or (-not $win.IsMouseOver -and [Windows.Input.Mouse]::LeftButton -ne 'Pressed')){Draw}
   FitScreen
-  if(-not $SelfTest){@{pid=$PID;at=(NowSeconds);page=$page;urgent=$urgent;visible=$win.IsVisible;showInTaskbar=$win.ShowInTaskbar;trayVisible=$tray.Visible;hasConsole=$script:hasConsole;monitors=[Windows.Forms.Screen]::AllScreens.Count;source='snapshot.json';design=2;title=$win.Title}|ConvertTo-Json|Set-Content -LiteralPath $statusPath -Encoding UTF8}
+  if(-not $SelfTest){@{pid=$PID;at=(NowSeconds);page=$page;urgent=$urgent;visible=$win.IsVisible;showInTaskbar=$win.ShowInTaskbar;trayVisible=$tray.Visible;hasConsole=$script:hasConsole;monitors=[Windows.Forms.Screen]::AllScreens.Count;width=$win.Width;height=$win.Height;view=$data.view;source='snapshot.json';design=2;title=$win.Title}|ConvertTo-Json|Set-Content -LiteralPath $statusPath -Encoding UTF8}
  }catch{$LiveDot.Text=' · Ошибка данных';$LiveDot.Foreground=Brush '#F06A76';Add-Content -LiteralPath $logPath -Value ((Get-Date -Format o)+' '+$_.Exception.Message)}
 }
 $timer=[Windows.Threading.DispatcherTimer]::new();$timer.Interval=[TimeSpan]::FromSeconds(1);$timer.Add_Tick({Tick})

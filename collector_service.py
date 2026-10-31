@@ -70,6 +70,7 @@ class Collector:
                 self.pending[name] = key, self.pool.submit(self.work, name, copy.deepcopy(settings))
         snapshot = dict(self.data, edition='personal', checked_at=now)
         snapshot['calendar_enabled'] = settings['calendar']['enabled']
+        snapshot['view'] = copy.deepcopy(settings['view'])
         cube_key = self.key('cube', settings)
         cube_pending = self.pending.get('cube')
         if cube_pending and cube_pending[1].done():
