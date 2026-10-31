@@ -30,6 +30,7 @@ $data.calendar.events=$savedEvents
 $results+=@{checks='calendar local timezone and upcoming reminder over ongoing meeting';passed=$true}
 if((Control 'CodexRemaining').Text -notmatch '83[.,]7%'){throw ('Precise weekly percentage missing: '+(Control 'CodexRemaining').Text+' raw '+$data.limits.weekly_pct)}
 if((Control 'ClaudeRemaining').Text -notmatch '0%'){throw 'Zero remaining incorrectly treated as missing'}
+if((Control 'ClaudeRemaining').ToolTip -match 'недоступна'){throw 'Available Claude quota must not be described as unavailable'}
 if((Control 'SessionList').Content.Children.Count -ne 2){throw 'Completed sessions must be visible by default'}
 if(Control 'CompletedToggle'){throw 'Completed toggle still occupies panel space'}
 $completedMenu.IsChecked=$false;$completedMenu.RaiseEvent([Windows.RoutedEventArgs]::new([Windows.Controls.MenuItem]::ClickEvent))
