@@ -7,7 +7,7 @@ import re
 import shutil
 import zipfile
 
-VERSION = '1.3.2'
+VERSION = '1.3.3'
 FILES = (
     'README.md', 'PACKAGE-README.txt', 'LICENSE', 'THIRD-PARTY-NOTICES.md', 'SECURITY.md',
     '.gitignore', '.github/workflows/check.yml', 'requirements.txt', 'requirements-build.txt',
@@ -18,7 +18,7 @@ FILES = (
     'local_metrics.py', 'safeio.py', 'burn.py', 'widget.ps1', 'unified.ps1', 'widget-launch.pyw',
     'indicators.ico', 'unified-test.ps1', 'test_burn.py', 'test_sessions.py', 'test_local_cache.py',
     'test_safeio.py', 'test_connections.py', 'build_release.py',
-    'test_installation.py', 'test_claude_usage.py', 'verify_installer.py',
+    'test_installation.py', 'test_claude_usage.py', 'test_usage_memory.py', 'verify_installer.py',
 )
 
 

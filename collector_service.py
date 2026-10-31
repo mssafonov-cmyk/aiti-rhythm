@@ -16,8 +16,8 @@ from local_metrics import codex_local
 from runtime import HERE, load_settings, load_secrets, provider_home
 from safeio import atomic_json
 from antigravity_metrics import antigravity_local, profile
-from usage_metrics import combined_usage
-from burn import metric_window
+from usage_metrics import combined_usage, DailyUsageMemory
+from burn import metric_window, day_start_msk
 
 
 class Collector:
@@ -26,6 +26,24 @@ class Collector:
         self.data, self.keys, self.pending, self.next_at = {}, {}, {}, {}
         self.pool = ThreadPoolExecutor(max_workers=6, thread_name_prefix='rhythm')
         self.cube = Cube()
+        self.daily_memory = DailyUsageMemory(root)
+
+    def usage_identity(self, name, settings):
+        if name == 'antigravity':
+            home = profile(settings[name]['home'])
+        elif name == 'codex':
+            home = provider_home(settings[name]['home'], 'CODEX_HOME', '.codex')
+        else:
+            home = provider_home(settings[name]['home'], 'CLAUDE_CONFIG_DIR', '.claude')
+        # Resolved environment profile plus existing settings/protected-command generation.
+        return hashlib.sha256((self.key(name, settings)+'|'+os.path.normcase(os.path.abspath(home))).encode()).hexdigest()
+
+    def run_work(self, name, settings):
+        start = day_start_msk(time.time())
+        result = self.work(name, settings)
+        if name in ('codex', 'claude', 'antigravity'):
+            result = dict(result, usage_day=start)  # Never label a cross-midnight request as the new day's total.
+        return result
 
     def key(self, name, settings):
         path = self.root / 'connections.sealed'
@@ -72,10 +90,12 @@ class Collector:
             if not enabled:
                 self.data[name] = {'enabled': False, 'events': []} if name == 'calendar' else {'enabled': False}
             elif name not in self.pending and now >= self.next_at.get(name, 0):
-                self.pending[name] = key, self.pool.submit(self.work, name, copy.deepcopy(settings))
+                self.pending[name] = key, self.pool.submit(self.run_work, name, copy.deepcopy(settings))
         snapshot = dict(self.data, edition='personal', checked_at=now)
         snapshot['calendar_enabled'] = settings['calendar']['enabled']
         snapshot['view'] = copy.deepcopy(settings['view'])
+        snapshot = self.daily_memory.enrich(snapshot, {name:self.usage_identity(name, settings)
+            for name in ('codex', 'claude', 'antigravity')}, now)
         snapshot['usage'] = combined_usage(snapshot, now)
         cube_key = self.key('cube', settings)
         cube_pending = self.pending.get('cube')

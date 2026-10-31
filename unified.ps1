@@ -74,10 +74,12 @@ function DrawUsage($c,$y,$compact,$narrow){
  for($i=0;$i -lt $providers.Count;$i++){
   $p=$providers[$i];$x=$i*$cw
   $tip=$p.name+' · токены за сегодня: '+$(if($null -eq $p.day_tokens){'нет данных'}else{('{0:N0}' -f $p.day_tokens)})+"`n"+$(if($null -eq $p.per_min){'Скорость неизвестна'}else{(TokenAmount $p.per_min)+' ток/мин'})+"`n"+$p.note+$(if(-not @($p.series|Where-Object {$null -ne $_}).Count){"`nИстория графика недоступна"}else{''})
+  if($p.cached_day){$tip+="`n* Последний сохранённый итог; источник пока не обновился.";if($p.day_updated_at){$tip+="`nОбновлено "+[DateTimeOffset]::FromUnixTimeSeconds([long]$p.day_updated_at).ToLocalTime().ToString('dd.MM HH:mm')}}
   $dot=[Windows.Shapes.Rectangle]::new();$dot.Width=3;$dot.Height=3;$dot.Fill=Brush $p.color;Put $c $dot $x ($y+21)
   $legend=Label $p.name 9 '#C4CED8';$legend.Name='Legend'+$p.name;$legend.Width=$cw-8;$legend.ToolTip=$tip;Put $c $legend ($x+7) ($y+16)
   $text=if($null -eq $p.day_tokens){'—'}else{$(if($p.partial){'от '}else{''})+(TokenAmount $p.day_tokens)}
-  $value=Label $text $(if($text.Length -gt 9){11}else{13}) '#E5E8EB';$value.Name='Daily'+$p.name;$value.FontFamily='Bahnschrift';$value.Width=$cw-4;$value.ToolTip=$tip;Put $c $value $x ($y+29)
+  if($p.cached_day){$text+='*'}
+  $value=Label $text $(if($text.Length -gt 9){11}else{13}) $(if($p.cached_day){'#ADB8C3'}else{'#E5E8EB'});$value.Name='Daily'+$p.name;$value.FontFamily='Bahnschrift';$value.Width=$cw-4;$value.ToolTip=$tip;Put $c $value $x ($y+29)
  }
  $speed=if($valid){$(if($usage.partial){'от '}else{''})+(TokenAmount $burn.per_min)+' ток/мин'}else{'нет данных'}
  $rate=Label ('Среднее за '+$minutes+' мин: '+$speed) 10 $(if($hot){'#E6B66B'}else{'#AAB7C4'});$rate.Name='TokenRate';$rate.Width=$w

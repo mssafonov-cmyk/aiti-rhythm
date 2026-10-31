@@ -8,6 +8,7 @@ __pycache__/
 snapshot.json
 widget-*.json
 metric-options.json
+daily-token-totals.json
 .env
 .env.*
 credentials*.json

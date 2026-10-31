@@ -202,6 +202,14 @@ foreach($width in @(260,380)){
  if($measure.DesiredSize.Width -gt $rateControl.ActualWidth){throw 'Rate period or units would be clipped'}
  if($rateControl.Text -notmatch 'от '){throw 'Partial rate needs a readable lower-bound qualifier'}
  Preview ('rhythm-three-providers-'+$width+'.png')
+ $cachedProvider=@($data.usage.providers|Where-Object name -eq 'Claude')[0]
+ $cachedProvider|Add-Member -NotePropertyName cached_day -NotePropertyValue $true -Force
+ $cachedProvider|Add-Member -NotePropertyName day_updated_at -NotePropertyValue ($now-300) -Force
+ Draw;$win.UpdateLayout()
+ if((Control 'DailyClaude').Text -notmatch '\*$' -or (Control 'DailyClaude').ToolTip -notmatch 'Последний сохранённый итог'){throw 'Retained daily amount must stay visible and explain its freshness'}
+ Preview ('rhythm-cached-day-'+$width+'.png')
+ $cachedProvider.cached_day=$false;Draw;$win.UpdateLayout()
+ if((Control 'DailyClaude').Text -match '\*$'){throw 'Fresh data must clear the cached marker'}
  Click (Control 'DetailsToggle');$win.UpdateLayout();Draw;$win.UpdateLayout()
  foreach($name in @('Codex','Claude','Antigravity')){if(-not (Control ('Graph'+$name))){throw 'Provider history must be available in details'}}
  Preview ('rhythm-provider-details-'+$width+'.png');Click (Control 'DetailsToggle')
