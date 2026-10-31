@@ -11,6 +11,20 @@ from discovery import discover
 
 
 class InstallationTests(unittest.TestCase):
+    def test_rebuild_keeps_previous_upload_artifact_unchanged(self):
+        from build_installer import stage_installer
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory)
+            installer=root/'Setup.exe'
+            installer.write_bytes(b'MZ-first-build')
+            first, first_hash=stage_installer(installer, root/'releases')
+            installer.write_bytes(b'MZ-second-build')
+            second, second_hash=stage_installer(installer, root/'releases')
+            self.assertNotEqual(first, second)
+            self.assertNotEqual(first_hash, second_hash)
+            self.assertEqual(first.read_bytes(), b'MZ-first-build')
+            self.assertEqual(second.read_bytes(), b'MZ-second-build')
+
     def test_disabled_external_claude_does_not_require_a_command(self):
         with tempfile.TemporaryDirectory() as directory:
             root=Path(directory)
