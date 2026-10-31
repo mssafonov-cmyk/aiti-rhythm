@@ -23,6 +23,7 @@ connections.json
 connections.sealed*
 collector-health.json
 rhythm-*.png
+!docs/images/rhythm-windows.png
 original/
 build/
 build-info.json

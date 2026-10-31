@@ -1,7 +1,29 @@
-# АйТи:Ритм
+# АйТи:Ритм (AITI Rhythm)
 
-Небольшая панель для Windows: сессии Codex, Claude Code и Antigravity CLI, ожидание ответа,
-расход токенов и, по желанию, ближайшие встречи. Окно сужается до 260.
+[English](https://github.com/mssafonov-cmyk/aiti-rhythm/blob/main/README.en.md) · [Скачать для Windows](https://github.com/mssafonov-cmyk/aiti-rhythm/releases/latest) · [Сообщить о проблеме](https://github.com/mssafonov-cmyk/aiti-rhythm/issues)
+
+**Кто из ИИ-агентов работает, кто ждёт ответа и сколько осталось лимита — в одном небольшом окне.**
+
+Ритм — настольная панель для **Codex, Claude Code и Antigravity CLI**.
+Она пригодится, когда ведёшь несколько сессий одновременно: не нужно по очереди
+открывать каждый чат или терминал, чтобы проверить, где требуется твоё участие.
+
+Windows desktop widget and AI session monitor: token usage, subscription limits
+and agent activity for Codex, Claude Code and Antigravity.
+
+<a href="https://raw.githubusercontent.com/mssafonov-cmyk/aiti-rhythm/main/docs/images/rhythm-windows.png"><img src="https://raw.githubusercontent.com/mssafonov-cmyk/aiti-rhythm/main/docs/images/rhythm-windows.png" alt="АйТи:Ритм на Windows: ближайшая встреча, статусы сессий Codex, остатки квот Codex, Claude и Gemini, дневные токены и скорость расхода" width="340" /></a>
+
+*Реальный скрин панели. Значения показывают состояние источников в момент снимка.*
+
+## Зачем нужен Ритм
+
+- **Не пропускать ожидание ответа.** Видно, какая сессия работает, а какая ждёт тебя; из панели можно перейти к сессии.
+- **Следить за расходом.** Дневные токены, скорость расхода и предупреждение с указанием наиболее затратной сессии.
+- **Видеть доступные квоты.** Недельный и пятичасовой остаток, время сброса; последнее известное значение сохраняется с отметкой времени при сбое источника.
+- **Держать встречу перед глазами.** Ближайшее событие и кнопка входа, если подключён календарь.
+
+Панель работает в Windows 10/11, сворачивается в трей и сужается до 260 пикселей.
+Календарь и физический кубик подключаются по желанию. Установка — обычным Setup.exe.
 
 ## Установить
 
@@ -66,6 +88,8 @@ Gemini показан рядом с Codex и Claude с таким же проц�
 
 Подробности: [подключения](PACKAGE-README.txt), [личные данные](SECURITY.md),
 [разработка и сборка](CONTRIBUTING.md). Код общий для всех установок. Лицензия — MIT.
+
+Автор: **Максим Сафонов** ([mssafonov-cmyk](https://github.com/mssafonov-cmyk)).
 
 Уведомление о повышенном расходе открывает указанную в нём сессию, даже если
 лидер расхода уже сменился. Приложение выбирается по метке журнала: Codex Desktop,
