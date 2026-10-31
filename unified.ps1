@@ -43,7 +43,7 @@ function DrawQuota($c,$narrow){
   $bar=[Windows.Controls.ProgressBar]::new();$bar.Name=$provider+'FiveHour';$bar.Width=$half-40;$bar.Height=3;$bar.Maximum=100;$bar.Value=if($null -eq $short){0}else{$short};$bar.Foreground=Brush $(if($null -ne $short -and $short -le 15){'#E6B66B'}else{'#99ADA9'});$bar.Background=Brush '#343D47';$bar.BorderThickness=0;$bar.Opacity=if($null -eq $short){0.35}else{1}
   $shortReset=QuotaReset $provider 'session';$bar.ToolTip=if($null -eq $short){'Источник не передал пятичасовую квоту.'}else{('5 часов · остаток {0:0.#}%' -f $short)+$(if($shortReset){' · сброс '+$shortReset.ToString('dd.MM HH:mm')}else{' · дата сброса не передана'})};$shortLabel.ToolTip=$bar.ToolTip;Put $c $bar ($x+40) (74+$shift)
   $reset=QuotaReset $provider 'weekly'
-  $text=if($null -eq $left){'Квота недоступна'}elseif($reset){'до '+$reset.ToString('dd.MM HH:mm')}else{'Дата не передана'}
+  $text=if($null -eq $left){'Квота недоступна'}elseif($reset){'Нед. до '+$reset.ToString('dd.MM HH:mm')}else{'Дата не передана'}
   $label=Label $text 9 '#939DA7';$label.Name=$provider+'Reset';$label.Width=$half;$label.ToolTip=if($reset){'Сброс недельной квоты: '+$reset.ToString('dd.MM.yyyy HH:mm')}else{'Источник передал расход, но не передал дату сброса недельной квоты.'};Put $c $label $x (88+$shift)
  }
 }

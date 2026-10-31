@@ -151,7 +151,7 @@ Draw;$win.UpdateLayout();Draw;$win.UpdateLayout()
 if((Control 'ClaudeReset').Text -ne 'Дата не передана'){throw 'Missing weekly reset must not be inferred from utilization'}
 $data.claude.limits.seven_day|Add-Member -NotePropertyName resets_at -NotePropertyValue $time.AddDays(3).ToString('o') -Force
 Draw;$win.UpdateLayout()
-if((Control 'ClaudeReset').Text -notmatch '^до '){throw 'Reported weekly reset was discarded'}
+if((Control 'ClaudeReset').Text -notmatch '^Нед. до '){throw 'Reported weekly reset was discarded'}
 foreach($width in @(260,380)){
  $win.Width=$width
  for($mask=0;$mask -lt 16;$mask++){
