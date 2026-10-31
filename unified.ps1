@@ -4,6 +4,19 @@ $script:signalKey=''
 $script:showDetails=$false
 $script:cardSignals=@{}
 $script:agyQuotaGroup='gemini'
+$script:quotaBarTemplate=[Windows.Markup.XamlReader]::Parse(@'
+<ControlTemplate xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" TargetType="ProgressBar">
+ <Grid SnapsToDevicePixels="True" ClipToBounds="True">
+  <Border x:Name="PART_Track" Background="{TemplateBinding Background}" CornerRadius="2"/>
+  <Border x:Name="PART_Indicator" Background="{TemplateBinding Foreground}" CornerRadius="2" HorizontalAlignment="Left"/>
+ </Grid>
+</ControlTemplate>
+'@)
+function QuotaBar($name,$width,$value,$color,$track){
+ $bar=[Windows.Controls.ProgressBar]::new();$bar.Name=$name;$bar.Width=$width;$bar.Height=4;$bar.Maximum=100;$bar.Value=$value
+ $bar.Template=$script:quotaBarTemplate;$bar.Foreground=Brush $color;$bar.Background=Brush $track;$bar.BorderThickness=0;$bar.SnapsToDevicePixels=$true
+ return $bar
+}
 function AgyBucket($period,$group=''){
  if(-not $group){$group=$script:agyQuotaGroup};$source=$data.antigravity
  if($source.enabled -eq $false -or -not $source.quota_at -or (NowSeconds)-$source.quota_at -ge 86400){return $null}
@@ -72,11 +85,11 @@ function DrawQuota($c,$narrow){
   $value=Label $(if($null -eq $left){'—'}else{('{0:0.#}%' -f $left)+$(if($stale){'*'}else{''})}) $(if($cell -lt 80){20}else{22}) $(if($stale){'#ADB8C3'}elseif($null -ne $left -and $left -le 15){'#E6B66B'}else{'#E5E8EB'})
   $value.Name=$provider+'Remaining';$value.FontFamily='Bahnschrift';$value.Width=if($stacked){$cell}else{$cell-43};$value.TextAlignment=if($stacked){'Left'}else{'Right'};$value.ToolTip=$tip
   Put $c $value $(if($stacked){$x}else{$x+43}) $(if($stacked){40}else{18})
-  $week=[Windows.Controls.ProgressBar]::new();$week.Name=$provider+'WeekBar';$week.Width=$cell;$week.Height=3;$week.Maximum=100;$week.Value=if($null -eq $left){0}else{$left};$week.Foreground=Brush $(if($agy){'#99DDAA'}else{'#A8BECD'});$week.Background=Brush '#343D47';$week.BorderThickness=0;$week.Opacity=if($null -eq $left){0.35}else{1};$week.ToolTip=$tip;Put $c $week $x (50+$shift)
+  $week=QuotaBar ($provider+'WeekBar') $cell $(if($null -eq $left){0}else{$left}) $(if($agy){'#99DDAA'}else{'#A8BECD'}) '#343D47';$week.Opacity=if($null -eq $left){0.35}else{1};$week.ToolTip=$tip;Put $c $week $x (50+$shift)
   if($null -ne $short){
-   $bar=[Windows.Controls.ProgressBar]::new();$bar.Name=$provider+'FiveHour';$bar.Width=$cell;$bar.Height=2;$bar.Maximum=100;$bar.Value=$short;$bar.Foreground=Brush $(if($short -le 15){'#E6B66B'}else{'#99ADA9'});$bar.Background=Brush $(if($short -eq 0){'#6A5030'}else{'#343D47'});$bar.BorderThickness=0
+   $bar=QuotaBar ($provider+'FiveHour') $cell $short $(if($short -le 15){'#E6B66B'}else{'#81B9E3'}) $(if($short -eq 0){'#6A5030'}else{'#343D47'})
    if($agy){$bar.ToolTip=$tip}else{$shortReset=QuotaReset $provider 'session';$bar.ToolTip=('5 часов · остаток {0:0.#}%' -f $short)+$(if($shortReset){' · сброс '+$shortReset.ToString('dd.MM HH:mm')}else{' · дата сброса не передана'})}
-   [Windows.Automation.AutomationProperties]::SetName($bar,('Пятичасовой лимит '+$provider));Put $c $bar $x (57+$shift)
+   [Windows.Automation.AutomationProperties]::SetName($bar,('Пятичасовой лимит '+$provider));Put $c $bar $x (55+$shift)
   }
   $text=if($null -eq $left){$(if($cell -lt 80){'Нет данных'}else{'Квота недоступна'})}elseif($reset){'До '+$reset.ToString($(if($cell -lt 80){'dd.MM'}else{'dd.MM HH:mm'}))}else{$(if($cell -lt 80){'Нет даты'}else{'Дата не передана'})}
   $label=Label $text 9 '#939DA7';$label.Name=$provider+'Reset';$label.Width=$cell;$label.ToolTip=if($agy){$tip}elseif($reset){'Сброс недельной квоты: '+$reset.ToString('dd.MM.yyyy HH:mm')}else{'Источник не передал дату сброса недельной квоты.'};Put $c $label $x $footer

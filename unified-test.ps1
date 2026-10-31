@@ -163,7 +163,9 @@ Preview 'rhythm-quota-no-five-hour.png'
 $data.claude.limits.five_hour=$savedFive
 Draw;$win.UpdateLayout()
 if(-not (Control 'ClaudeFiveHour') -or (Control 'CodexFiveHour')){throw 'Short windows must hide independently per provider'}
-if((Control 'ClaudeFiveHour').Height -ne 2 -or (Control 'ClaudeFiveHour').ToolTip -notmatch '5 часов'){throw 'Thin short-window track needs an informative tooltip'}
+if((Control 'ClaudeFiveHour').Height -ne 4 -or (Control 'ClaudeFiveHour').ToolTip -notmatch '5 часов'){throw 'Paired short-window track needs an informative tooltip'}
+$week=Control 'ClaudeWeekBar';$short=Control 'ClaudeFiveHour'
+if($week.Height -ne 4 -or [Windows.Controls.Canvas]::GetTop($short)-[Windows.Controls.Canvas]::GetTop($week)-$week.Height -ne 1){throw 'Paired quota tracks must retain a one-DIP gap without extra height'}
 Preview 'rhythm-quota-one-five-hour.png'
 $data.limits.session_pct=$savedSession
 foreach($width in @(260,380)){
