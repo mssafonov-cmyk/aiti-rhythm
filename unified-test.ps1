@@ -246,6 +246,25 @@ Draw;$win.UpdateLayout();Draw;$win.UpdateLayout()
 if(Control 'AntigravityRemaining'){throw 'Expired quotas must not become100% or remain visible'}
 $results+=@{checks='Antigravity real quota groups; menu; zero/missing/expired/stale; compact260/380; period/reset metadata';passed=$true}
 
+# Historical Claude quota stays visible through429/offline/reset with its original time.
+$data.claude|Add-Member -NotePropertyMembers @{limits_error='rate_limited';limits_retry_at=$now+1626;limits_cached=$true;error='TimeoutError'} -Force
+$data.claude.limits_at=$now-900;$data.claude.limits.seven_day.used_percentage=18
+$data.claude.limits.seven_day.resets_at=$time.AddMinutes(-1).ToString('o')
+foreach($width in @(260,380)){
+ $win.Width=$width;Draw;$win.UpdateLayout();Draw;$win.UpdateLayout()
+ if((Control 'ClaudeRemaining').Text -ne '82%*'){throw 'Last known percentage disappeared during429/offline'}
+ if((Control 'ClaudeReset').Text -notmatch '^\d\d\.\d\d \d\d:\d\d\*$'){throw 'Saved quota needs a visible original timestamp'}
+ $tip=(Control 'ClaudeRemaining').ToolTip
+ if($tip -notmatch '429' -or $tip -notmatch 'Повтор не раньше' -or $tip -notmatch 'предыдущего окна' -or $tip -notmatch 'Получено'){throw 'Historical quota tooltip must explain time, backoff and expired window'}
+ if($script:cardSignals['ResourcesCard'].key -match 'Claude'){throw 'Historical quota must not signal current exhaustion'}
+ Preview ('rhythm-claude-retained-'+$width+'.png')
+}
+$data.claude.limits_at=$now;$data.claude.checked_at=$now;$data.claude.limits_cached=$false;$data.claude.limits_error=$null;$data.claude.error=$null;$data.claude.limits_retry_at=$null
+$data.claude.limits.seven_day.resets_at=$time.AddDays(2).ToString('o')
+Draw;$win.UpdateLayout()
+if((Control 'ClaudeRemaining').Text -ne '82%' -or (Control 'ClaudeReset').Text -notmatch '^До '){throw 'Successful quota read must restore the current appearance'}
+$results+=@{checks='Claude retained quota; visible original timestamp;429 retry tooltip; expired window; no stale exhaustion signal; recovery260/380';passed=$true}
+
 $now=NowSeconds;$id='00000000-0000-0000-0000-000000000001'
 foreach($route in @(@('codex_desktop',('codex://threads/'+$id)),@('codex_vscode',('vscode://openai.chatgpt/local/'+$id)),@('codex_cursor',('cursor://openai.chatgpt/local/'+$id)))){
  OpenSession ([pscustomobject]@{provider='Codex';id=$id;navigation=[pscustomobject]@{kind=$route[0]}})

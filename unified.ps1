@@ -40,7 +40,7 @@ function ShowAgyGroups($sender){
 function WeeklyRemaining($provider){
  if($provider -eq 'Codex'){
   if((Fresh $data.limits) -and $null -ne $data.limits.weekly_pct){return [Math]::Max(0.0,[Math]::Min(100.0,100*(1-[double]$data.limits.weekly_pct)))}
- }elseif((Fresh $data.claude) -and $data.claude.limits_at -and (NowSeconds)-$data.claude.limits_at -lt 600 -and $null -ne $data.claude.limits.seven_day.used_percentage){
+ }elseif($data.claude.enabled -ne $false -and $data.claude.limits_at -and $null -ne $data.claude.limits.seven_day.used_percentage){
   return [Math]::Max(0.0,[Math]::Min(100.0,100-[double]$data.claude.limits.seven_day.used_percentage))
  }
  return $null
@@ -51,9 +51,26 @@ function ViewOption($name){
 function FiveHourRemaining($provider){
  if($provider -eq 'Codex'){
   if((Fresh $data.limits) -and $null -ne $data.limits.session_pct){return [Math]::Max(0,[Math]::Min(100,100*(1-[double]$data.limits.session_pct)))}
- }elseif((Fresh $data.claude) -and $data.claude.limits_at -and (NowSeconds)-$data.claude.limits_at -lt 600 -and $null -ne $data.claude.limits.five_hour.used_percentage){
+ }elseif($data.claude.enabled -ne $false -and $data.claude.limits_at -and $null -ne $data.claude.limits.five_hour.used_percentage){
   return [Math]::Max(0,[Math]::Min(100,100-[double]$data.claude.limits.five_hour.used_percentage))
  };return $null
+}
+function ClaudeQuotaStale($window='seven_day'){
+ $source=$data.claude
+ $reset=$source.limits.$window.resets_at
+ return ($source.limits_cached -or $source.limits_error -or -not (Fresh $source) -or -not $source.limits_at -or (NowSeconds)-$source.limits_at -ge 600 -or ($reset -and (EventTime $reset) -le [DateTimeOffset]::FromUnixTimeSeconds([long](NowSeconds))))
+}
+function ClaudeQuotaTip($window='seven_day'){
+ $source=$data.claude;$short=$window -eq 'five_hour';$value=$source.limits.$window.used_percentage
+ if($null -eq $value -or -not $source.limits_at){return 'Квота Claude пока не получена.'}
+ $tip='Claude · '+$(if($short){'5 часов'}else{'неделя'})+(' · остаток {0:0.#}%' -f (100-$value))
+ $tip+="`nПолучено "+[DateTimeOffset]::FromUnixTimeSeconds([long]$source.limits_at).ToLocalTime().ToString('dd.MM.yyyy HH:mm')
+ if(ClaudeQuotaStale $window){$tip+="`n* Последнее известное значение; текущий остаток не подтверждён."}
+ $reset=$source.limits.$window.resets_at
+ if($reset){$tip+="`nСброс "+(EventTime $reset).ToString('dd.MM.yyyy HH:mm');if((EventTime $reset) -le [DateTimeOffset]::FromUnixTimeSeconds([long](NowSeconds))){$tip+="`nЭто значение предыдущего окна лимита."}}
+ if($source.limits_retry_at -gt (NowSeconds)){$tip+="`nПовтор не раньше "+[DateTimeOffset]::FromUnixTimeSeconds([long]$source.limits_retry_at).ToLocalTime().ToString('dd.MM HH:mm:ss')}
+ if($source.limits_error -eq 'rate_limited'){$tip+="`nСервис ограничил частоту запросов (429)."}
+ return $tip
 }
 function QuotaReset($provider,$window){
  try{
@@ -81,6 +98,7 @@ function DrawQuota($c,$narrow){
    $name=FlatButton ($(if($group -eq 'gemini'){'Gemini'}else{'Другие'})+' ▾') $cell {param($sender,$e) ShowAgyGroups $sender};$caption=Label ($(if($group -eq 'gemini'){'Gemini'}else{'Другие'})+' ▾') 11 '#939DA7';$caption.Width=$cell;$name.Content=$caption;$name.Name='AgyQuotaGroup';$name.Height=18;$name.FontSize=10;$name.HorizontalContentAlignment='Left';$name.Padding='0';$name.ToolTip=$tip;Put $c $name $x 22
   }else{
    $left=WeeklyRemaining $provider;$short=FiveHourRemaining $provider;$reset=QuotaReset $provider 'weekly';$tip=if($null -eq $left){'Недельная квота недоступна в выбранном источнике.'}else{'Остаток недельной квоты '+$provider};Put $c (Label $provider 11 '#939DA7') $x 24
+   if($provider -eq 'Claude'){$stale=ClaudeQuotaStale;$tip=ClaudeQuotaTip}
   }
   $value=Label $(if($null -eq $left){'—'}else{('{0:0.#}%' -f $left)+$(if($stale){'*'}else{''})}) $(if($cell -lt 80){20}else{22}) $(if($stale){'#ADB8C3'}elseif($null -ne $left -and $left -le 15){'#E6B66B'}else{'#E5E8EB'})
   $value.Name=$provider+'Remaining';$value.FontFamily='Bahnschrift';$value.Width=if($stacked){$cell}else{$cell-43};$value.TextAlignment=if($stacked){'Left'}else{'Right'};$value.ToolTip=$tip
@@ -88,11 +106,12 @@ function DrawQuota($c,$narrow){
   $week=QuotaBar ($provider+'WeekBar') $cell $(if($null -eq $left){0}else{$left}) $(if($agy){'#99DDAA'}else{'#A8BECD'}) '#343D47';$week.Opacity=if($null -eq $left){0.35}else{1};$week.ToolTip=$tip;Put $c $week $x (50+$shift)
   if($null -ne $short){
    $bar=QuotaBar ($provider+'FiveHour') $cell $short $(if($short -le 15){'#E6B66B'}else{'#81B9E3'}) $(if($short -eq 0){'#6A5030'}else{'#343D47'})
-   if($agy){$bar.ToolTip=$tip}else{$shortReset=QuotaReset $provider 'session';$bar.ToolTip=('5 часов · остаток {0:0.#}%' -f $short)+$(if($shortReset){' · сброс '+$shortReset.ToString('dd.MM HH:mm')}else{' · дата сброса не передана'})}
+   if($agy){$bar.ToolTip=$tip}elseif($provider -eq 'Claude'){$bar.ToolTip=ClaudeQuotaTip 'five_hour';if(ClaudeQuotaStale 'five_hour'){$bar.Opacity=0.5}}else{$shortReset=QuotaReset $provider 'session';$bar.ToolTip=('5 часов · остаток {0:0.#}%' -f $short)+$(if($shortReset){' · сброс '+$shortReset.ToString('dd.MM HH:mm')}else{' · дата сброса не передана'})}
    [Windows.Automation.AutomationProperties]::SetName($bar,('Пятичасовой лимит '+$provider));Put $c $bar $x (55+$shift)
   }
   $text=if($null -eq $left){$(if($cell -lt 80){'Нет данных'}else{'Квота недоступна'})}elseif($reset){'До '+$reset.ToString($(if($cell -lt 80){'dd.MM'}else{'dd.MM HH:mm'}))}else{$(if($cell -lt 80){'Нет даты'}else{'Дата не передана'})}
-  $label=Label $text 9 '#939DA7';$label.Name=$provider+'Reset';$label.Width=$cell;$label.ToolTip=if($agy){$tip}elseif($reset){'Сброс недельной квоты: '+$reset.ToString('dd.MM.yyyy HH:mm')}else{'Источник не передал дату сброса недельной квоты.'};Put $c $label $x $footer
+  if($provider -eq 'Claude' -and $null -ne $left -and $stale){$text=[DateTimeOffset]::FromUnixTimeSeconds([long]$data.claude.limits_at).ToLocalTime().ToString('dd.MM HH:mm')+'*'}
+  $label=Label $text 9 '#939DA7';$label.Name=$provider+'Reset';$label.Width=$cell;$label.ToolTip=if($agy -or $provider -eq 'Claude'){$tip}elseif($reset){'Сброс недельной квоты: '+$reset.ToString('dd.MM.yyyy HH:mm')}else{'Источник не передал дату сброса недельной квоты.'};Put $c $label $x $footer
  }
 }
 function UsageData{
@@ -116,7 +135,8 @@ function DrawUsage($c,$y,$compact,$narrow){
  for($i=0;$i -lt $providers.Count;$i++){
   $p=$providers[$i];$x=$i*$cw
   $tip=$p.name+' · токены за сегодня: '+$(if($null -eq $p.day_tokens){'нет данных'}else{('{0:N0}' -f $p.day_tokens)})+"`n"+$(if($null -eq $p.per_min){'Скорость неизвестна'}else{(TokenAmount $p.per_min)+' ток/мин'})+"`n"+$p.note+$(if(-not @($p.series|Where-Object {$null -ne $_}).Count){"`nИстория графика недоступна"}else{''})
-  if($p.cached_day){$tip+="`n* Последний сохранённый итог; источник пока не обновился.";if($p.day_updated_at){$tip+="`nОбновлено "+[DateTimeOffset]::FromUnixTimeSeconds([long]$p.day_updated_at).ToLocalTime().ToString('dd.MM HH:mm')}}
+  if($p.cached_day){$tip+="`n* Последний сохранённый итог; источник пока не обновился."}
+  if($p.day_updated_at){$tip+="`nОбновлено "+[DateTimeOffset]::FromUnixTimeSeconds([long]$p.day_updated_at).ToLocalTime().ToString('dd.MM.yyyy HH:mm')}
   $dot=[Windows.Shapes.Rectangle]::new();$dot.Width=3;$dot.Height=3;$dot.Fill=Brush $p.color;Put $c $dot $x ($y+21)
   $legend=Label $p.name 9 '#C4CED8';$legend.Name='Legend'+$p.name;$legend.Width=$cw-8;$legend.ToolTip=$tip;Put $c $legend ($x+7) ($y+16)
   $text=if($null -eq $p.day_tokens){'—'}else{$(if($p.partial){'от '}else{''})+(TokenAmount $p.day_tokens)}
@@ -182,7 +202,7 @@ function CardSignal($border,$key){
 function UpdateCardSignals{
  $event=SelectedEvent;$delta=if($event){(EventTime $event.planned_date).ToUnixTimeSeconds()-(NowSeconds)}else{999999}
  $meetingKey=if((CalendarFresh) -and $delta -gt 0 -and $delta -le 300){'meeting:'+$event.ref}else{''}
- $low=@();if(ViewOption 'limits'){foreach($provider in @('Codex','Claude')){$left=WeeklyRemaining $provider;if($null -ne $left -and $left -le 5){$low+=$provider};$short=FiveHourRemaining $provider;if($null -ne $short -and $short -le 5){$low+=($provider+'5h')}}}
+ $low=@();if(ViewOption 'limits'){foreach($provider in @('Codex','Claude')){$left=WeeklyRemaining $provider;if($null -ne $left -and $left -le 5 -and ($provider -ne 'Claude' -or -not (ClaudeQuotaStale))){$low+=$provider};$short=FiveHourRemaining $provider;if($null -ne $short -and $short -le 5 -and ($provider -ne 'Claude' -or -not (ClaudeQuotaStale 'five_hour'))){$low+=($provider+'5h')}}}
  if((ViewOption 'limits') -and $data.antigravity.quota_at -and (NowSeconds)-$data.antigravity.quota_at -lt 600){foreach($period in @('weekly','5h')){$bucket=AgyBucket $period;if($bucket -and $bucket.remaining_fraction -le 0.05){$low+=('Antigravity'+$period)}}}
  $usage=UsageData;$burnKey=if((ViewOption 'usage') -and (Fresh $usage 180) -and $usage.burn.alert){'burn:'+(@($usage.burn.leaders)[0].id)}else{''}
  CardSignal $script:meetingBorder $meetingKey;CardSignal $script:resourceBorder ($burnKey+($low -join ','))

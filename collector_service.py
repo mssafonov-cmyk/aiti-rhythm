@@ -17,6 +17,7 @@ from runtime import HERE, load_settings, load_secrets, provider_home
 from safeio import atomic_json
 from antigravity_metrics import antigravity_local, profile
 from usage_metrics import combined_usage, DailyUsageMemory
+from claude_usage import ClaudeQuotaMemory
 from burn import metric_window, day_start_msk
 
 
@@ -27,6 +28,7 @@ class Collector:
         self.pool = ThreadPoolExecutor(max_workers=6, thread_name_prefix='rhythm')
         self.cube = Cube()
         self.daily_memory = DailyUsageMemory(root)
+        self.claude_quota_memory = ClaudeQuotaMemory(root)
 
     def usage_identity(self, name, settings):
         if name == 'antigravity':
@@ -99,6 +101,7 @@ class Collector:
         snapshot = dict(self.data, edition='personal', checked_at=now)
         snapshot['calendar_enabled'] = settings['calendar']['enabled']
         snapshot['view'] = copy.deepcopy(settings['view'])
+        snapshot['claude'] = self.claude_quota_memory.enrich(snapshot.get('claude', {}), self.usage_identity('claude', settings), now)
         snapshot = self.daily_memory.enrich(snapshot, {name:self.usage_identity(name, settings)
             for name in ('codex', 'claude', 'antigravity')}, now)
         snapshot['usage'] = combined_usage(snapshot, now)
