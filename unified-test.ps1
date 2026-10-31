@@ -151,7 +151,20 @@ Draw;$win.UpdateLayout();Draw;$win.UpdateLayout()
 if((Control 'ClaudeReset').Text -ne 'Дата не передана'){throw 'Missing weekly reset must not be inferred from utilization'}
 $data.claude.limits.seven_day|Add-Member -NotePropertyName resets_at -NotePropertyValue $time.AddDays(3).ToString('o') -Force
 Draw;$win.UpdateLayout()
-if((Control 'ClaudeReset').Text -notmatch '^Нед. до '){throw 'Reported weekly reset was discarded'}
+if((Control 'ClaudeReset').Text -notmatch '^До '){throw 'Reported weekly reset was discarded'}
+# Missing short windows must leave no placeholder or label; genuine0 remains visible.
+$knownHeight=$win.Height;$savedFive=$data.claude.limits.five_hour;$savedSession=$data.limits.session_pct
+$data.claude.limits.five_hour=$null;$data.limits.session_pct=$null
+Draw;$win.UpdateLayout();Draw;$win.UpdateLayout()
+if((Control 'ClaudeFiveHour') -or (Control 'CodexFiveHour')){throw 'Absent five-hour windows must not render tracks'}
+if($win.Height -ne $knownHeight-8){throw 'Absent five-hour windows must reclaim their row height'}
+Preview 'rhythm-quota-no-five-hour.png'
+$data.claude.limits.five_hour=$savedFive
+Draw;$win.UpdateLayout()
+if(-not (Control 'ClaudeFiveHour') -or (Control 'CodexFiveHour')){throw 'Short windows must hide independently per provider'}
+if((Control 'ClaudeFiveHour').Height -ne 2 -or (Control 'ClaudeFiveHour').ToolTip -notmatch '5 часов'){throw 'Thin short-window track needs an informative tooltip'}
+Preview 'rhythm-quota-one-five-hour.png'
+$data.limits.session_pct=$savedSession
 foreach($width in @(260,380)){
  $win.Width=$width
  for($mask=0;$mask -lt 16;$mask++){

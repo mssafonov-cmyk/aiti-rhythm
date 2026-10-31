@@ -27,9 +27,14 @@ function QuotaReset($provider,$window){
   else{$stamp=if($window -eq 'weekly'){$data.claude.limits.seven_day.resets_at}else{$data.claude.limits.five_hour.resets_at};if($stamp){return EventTime $stamp}}
  }catch{};return $null
 }
+function HasFiveHour{
+ foreach($provider in @('Codex','Claude')){if($null -ne (FiveHourRemaining $provider)){return $true}};return $false
+}
+function QuotaHeight($narrow){return 71+$(if($narrow){24}else{0})+$(if(HasFiveHour){8}else{0})}
 function DrawQuota($c,$narrow){
- $w=$c.Width;CardHeading $c 'ЛИМИТЫ' 'Остаток'
+ $w=$c.Width;CardHeading $c 'НЕДЕЛЯ' 'Остаток'
  $gap=if($narrow){16}else{24};$half=($w-$gap)/2;$shift=if($narrow){24}else{0}
+ $footer=58+$shift+$(if(HasFiveHour){8}else{0})
  for($i=0;$i -lt 2;$i++){
   $provider=@('Codex','Claude')[$i];$left=WeeklyRemaining $provider;$short=FiveHourRemaining $provider;$x=$i*($half+$gap)
   Put $c (Label $provider 11 '#939DA7') $x 24
@@ -37,14 +42,15 @@ function DrawQuota($c,$narrow){
   $value.Name=$provider+'Remaining';$value.FontFamily='Bahnschrift';$value.Width=if($narrow){$half}else{$half-43};$value.TextAlignment=if($narrow){'Left'}else{'Right'}
   $value.ToolTip=if($null -eq $left){'Недельная квота недоступна в выбранном источнике.'}else{'Остаток недельной квоты '+$provider}
   Put $c $value $(if($narrow){$x}else{$x+43}) $(if($narrow){40}else{18})
-  Put $c (Label 'Неделя' 9 '#939DA7') $x (44+$shift)
-  $week=[Windows.Controls.ProgressBar]::new();$week.Name=$provider+'WeekBar';$week.Width=$half;$week.Height=3;$week.Maximum=100;$week.Value=if($null -eq $left){0}else{$left};$week.Foreground=Brush '#A8BECD';$week.Background=Brush '#343D47';$week.BorderThickness=0;$week.Opacity=if($null -eq $left){0.35}else{1};Put $c $week $x (58+$shift)
-  $shortLabel=Label $(if($null -eq $short){'5 ч · —'}else{'5 ч'}) 9 '#939DA7';$shortLabel.Width=38;Put $c $shortLabel $x (69+$shift)
-  $bar=[Windows.Controls.ProgressBar]::new();$bar.Name=$provider+'FiveHour';$bar.Width=$half-40;$bar.Height=3;$bar.Maximum=100;$bar.Value=if($null -eq $short){0}else{$short};$bar.Foreground=Brush $(if($null -ne $short -and $short -le 15){'#E6B66B'}else{'#99ADA9'});$bar.Background=Brush '#343D47';$bar.BorderThickness=0;$bar.Opacity=if($null -eq $short){0.35}else{1}
-  $shortReset=QuotaReset $provider 'session';$bar.ToolTip=if($null -eq $short){'Источник не передал пятичасовую квоту.'}else{('5 часов · остаток {0:0.#}%' -f $short)+$(if($shortReset){' · сброс '+$shortReset.ToString('dd.MM HH:mm')}else{' · дата сброса не передана'})};$shortLabel.ToolTip=$bar.ToolTip;Put $c $bar ($x+40) (74+$shift)
+  $week=[Windows.Controls.ProgressBar]::new();$week.Name=$provider+'WeekBar';$week.Width=$half;$week.Height=3;$week.Maximum=100;$week.Value=if($null -eq $left){0}else{$left};$week.Foreground=Brush '#A8BECD';$week.Background=Brush '#343D47';$week.BorderThickness=0;$week.Opacity=if($null -eq $left){0.35}else{1};$week.ToolTip=$value.ToolTip;Put $c $week $x (50+$shift)
+  if($null -ne $short){
+   $bar=[Windows.Controls.ProgressBar]::new();$bar.Name=$provider+'FiveHour';$bar.Width=$half;$bar.Height=2;$bar.Maximum=100;$bar.Value=$short;$bar.Foreground=Brush $(if($short -le 15){'#E6B66B'}else{'#99ADA9'});$bar.Background=Brush $(if($short -eq 0){'#6A5030'}else{'#343D47'});$bar.BorderThickness=0
+   $shortReset=QuotaReset $provider 'session';$bar.ToolTip=('5 часов · остаток {0:0.#}%' -f $short)+$(if($shortReset){' · сброс '+$shortReset.ToString('dd.MM HH:mm')}else{' · дата сброса не передана'})
+   [Windows.Automation.AutomationProperties]::SetName($bar,('Пятичасовой лимит '+$provider));Put $c $bar $x (57+$shift)
+  }
   $reset=QuotaReset $provider 'weekly'
-  $text=if($null -eq $left){'Квота недоступна'}elseif($reset){'Нед. до '+$reset.ToString('dd.MM HH:mm')}else{'Дата не передана'}
-  $label=Label $text 9 '#939DA7';$label.Name=$provider+'Reset';$label.Width=$half;$label.ToolTip=if($reset){'Сброс недельной квоты: '+$reset.ToString('dd.MM.yyyy HH:mm')}else{'Источник передал расход, но не передал дату сброса недельной квоты.'};Put $c $label $x (88+$shift)
+  $text=if($null -eq $left){'Квота недоступна'}elseif($reset){'До '+$reset.ToString('dd.MM HH:mm')}else{'Дата не передана'}
+  $label=Label $text 9 '#939DA7';$label.Name=$provider+'Reset';$label.Width=$half;$label.ToolTip=if($reset){'Сброс недельной квоты: '+$reset.ToString('dd.MM.yyyy HH:mm')}else{'Источник передал расход, но не передал дату сброса недельной квоты.'};Put $c $label $x $footer
  }
 }
 function UsageData{
@@ -161,7 +167,7 @@ function DrawUnified{
  $h=$rootCanvas.Height-$bannerHeight;$ev=SelectedEvent;$nearest=NextEvent;$usage=UsageData;$burn=$usage.burn;$valid=(Fresh $usage 180) -and $usage.observed;$hot=$valid -and $burn.alert
  $calendarVisible=CalendarVisible;$sessionsVisible=ViewOption 'sessions';$limitsVisible=ViewOption 'limits';$usageVisible=ViewOption 'usage';$compactUsage=ViewOption 'compact_usage';$automatic=ViewOption 'auto_height'
  $narrow=$rootCanvas.Width -lt 300;$meetingHeight=if($calendarVisible){130}else{0}
- $quotaHeight=if($limitsVisible){$(if($narrow){125}else{101})}else{0}
+ $quotaHeight=if($limitsVisible){QuotaHeight $narrow}else{0}
  $usageHeight=if($usageVisible){$(if($compactUsage){40}else{76})+$(if($showDetails -or ($hot -and -not $compactUsage)){80}else{0})}else{0}
  $resourceHeight=if($limitsVisible -or $usageVisible){26+$quotaHeight+$usageHeight+$(if($limitsVisible -and $usageVisible){10}else{0})}else{0}
  $rows=@();foreach($source in @($data.codex,$data.claude,$data.antigravity)){if(Fresh $source 180){$rows+=@($source.sessions|Where-Object {$null -ne $_ -and ($showCompleted -or $_.status -ne 'idle')})}}
