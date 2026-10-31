@@ -87,7 +87,8 @@ def codex_local(home=None):
     index=source_home/'session_index.jsonl'
     titles={r.get('id'):r.get('thread_name','') for r in records(index)} if index.exists() else {}
     from session_navigation import codex_navigation
-    for p in sorted((source_home/'sessions').rglob('*.jsonl'),key=lambda path:path.stat().st_mtime,reverse=True):
+    destinations = {}
+    for p in (source_home/'sessions').rglob('*.jsonl'):
         if p.stat().st_mtime < now.timestamp()-7*86400: continue
         prev = {}; state = 'unknown'; last = 0; project = ''; sid = str(p);navigation={'kind':'manual'}
         sums = dict(input=0,output=0,cache=0);points=[];status=SessionState()
@@ -118,6 +119,9 @@ def codex_local(home=None):
                     delta=max(0,usage.get(src,0)-prev.get(src,0)) if not prev.get('_fork') else 0
                     sums[dst]+=delta
             prev=usage
+        changed=p.stat().st_mtime
+        if sid not in destinations or changed >= destinations[sid][0]:
+            destinations[sid]=(changed,navigation)
         if sid in seen_sessions: continue
         seen_sessions.add(sid)
         all_points.extend(points)
@@ -132,6 +136,8 @@ def codex_local(home=None):
             if state=='working' and time.time()-p.stat().st_mtime>1800: state='unknown'
             sessions.append(dict(provider='Codex',project=project,status=state,at=last,
                                  id=sid,title=titles.get(sid,project),rate=rate,navigation=navigation))
+    for item in sessions+consumers:
+        item['navigation']=destinations[item['id']][1]
     consumers.sort(key=lambda v:(v['per_min'],v['day_tokens']),reverse=True)
     overall=velocity(all_points,now.timestamp(),window)
     overall['alert']=overall['level'] in ('warning','critical') or any(v['level'] in ('warning','critical') for v in consumers)

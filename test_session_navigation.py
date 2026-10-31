@@ -10,6 +10,24 @@ OTHER='00000000-0000-0000-0000-000000000002'
 
 
 class NavigationTests(unittest.TestCase):
+    def test_latest_origin_does_not_reorder_token_accounting(self):
+        import os
+        from unittest.mock import patch
+        from datetime import datetime,timezone
+        from local_metrics import codex_local
+        with tempfile.TemporaryDirectory() as folder:
+            root=Path(folder);(root/'sessions').mkdir();now=time.time();files=[]
+            for name,origin,age,total in [('a','Codex Desktop',1,1000),('b','VS Code',0,300)]:
+                p=root/'sessions'/(name+'.jsonl');files.append(p);stamp=datetime.now(timezone.utc).isoformat()
+                rows=[dict(type='session_meta',timestamp=stamp,payload=dict(id=SID,cwd=str(root),originator=origin)),
+                      dict(type='event_msg',timestamp=stamp,payload=dict(type='task_started')),
+                      dict(type='event_msg',timestamp=stamp,payload=dict(type='token_count',info={'total_token_usage':{'input_tokens':total}}))]
+                p.write_text('\n'.join(json.dumps(r) for r in rows)+'\n');os.utime(p,(now-age,now-age))
+            with patch.object(Path,'rglob',return_value=iter(files)):
+                result=codex_local(root)
+            self.assertEqual(result['tokens']['input'],1000)
+            self.assertEqual(result['sessions'][0]['navigation']['kind'],'codex_vscode')
+
     def test_protocol_cannot_inject_worker_flags(self):
         self.assertTrue(valid_activation_args(['--notification','aiti-rhythm://notification/'+SID]))
         for args in (['--notification','uri','--collector'],['--collector','--notification','uri'],['--notification','uri','--data-dir','elsewhere']):
