@@ -65,6 +65,7 @@ foreach($name in @('OpenMeeting','CopyMeeting')){
  if($hit -ne $button){throw ('Obstructed '+$name)};Click $button
  if($script:testMeetingAction.url -ne 'https://telemost.360.yandex.ru/j/test' -or $script:testMeetingAction.copy -ne ($name -eq 'CopyMeeting')){throw 'Meeting action failed'}
 }
+$data.codex.sessions[0]|Add-Member -NotePropertyName navigation -NotePropertyValue ([pscustomobject]@{kind='codex_desktop'}) -Force;Draw
 Click (Control 'SessionRow');if($script:testSessionUrl -ne 'codex://threads/00000000-0000-0000-0000-000000000001'){throw 'Session navigation failed'}
 Click (Control 'DetailsToggle');if(-not $script:showDetails){throw 'Details toggle failed'}
 Click (Control 'DetailsToggle')
@@ -242,5 +243,25 @@ $data.antigravity.quota.'gemini-weekly'.reset_at=$now-1;$data.antigravity.quota.
 Draw;$win.UpdateLayout();Draw;$win.UpdateLayout()
 if(Control 'AntigravityRemaining'){throw 'Expired quotas must not become100% or remain visible'}
 $results+=@{checks='Antigravity real quota groups; menu; zero/missing/expired/stale; compact260/380; period/reset metadata';passed=$true}
+
+$now=NowSeconds;$id='00000000-0000-0000-0000-000000000001'
+foreach($route in @(@('codex_desktop',('codex://threads/'+$id)),@('codex_vscode',('vscode://openai.chatgpt/local/'+$id)),@('codex_cursor',('cursor://openai.chatgpt/local/'+$id)))){
+ OpenSession ([pscustomobject]@{provider='Codex';id=$id;navigation=[pscustomobject]@{kind=$route[0]}})
+ if($script:testSessionUrl -ne $route[1]){throw 'Session routed to wrong application'}
+}
+OpenSession ([pscustomobject]@{provider='Claude';id=$id;navigation=[pscustomobject]@{kind='claude_vscode'}})
+if($script:testSessionUrl -ne ('vscode://anthropic.claude-code/open?session='+$id)){throw 'Claude route wrong'}
+OpenSession ([pscustomobject]@{provider='Codex';id=$id;navigation=[pscustomobject]@{kind='manual'}})
+if(-not $script:testSessionChoice -or $script:testSessionUrl){throw 'Unknown origin must not default to desktop'}
+$first=[pscustomobject]@{provider='Codex';id=$id;title='Тест & <сессия>';per_min=100;navigation=[pscustomobject]@{kind='codex_desktop'}}
+$burn=[pscustomobject]@{per_min=100;leaders=@($first);leader_basis='window'}
+if(-not (ShowBurnNotice $burn)){throw 'Toast failed to prepare'}
+$ref=$script:testToastRef;$xml=[xml]$script:testToastXml
+$first.id='00000000-0000-0000-0000-000000000002';$first.navigation.kind='codex_vscode'
+$record=Get-Content -LiteralPath (Join-Path $root ('notifications/'+$ref+'.json')) -Raw|ConvertFrom-Json
+if($record.target.id -ne $id -or $record.target.navigation.kind -ne 'codex_desktop'){throw 'Old toast changed with live leader'}
+if($xml.toast.activationType -ne 'protocol' -or $xml.toast.launch -ne ('aiti-rhythm://notification/'+$ref)){throw 'Toast needs immutable protocol activation'}
+if($xml.toast.visual.binding.text[1] -notmatch 'Тест & <сессия>'){throw 'Toast text escaping lost title'}
+$results+=@{checks='application routes; unknown choice; immutable per-toast target and escaped native activation';passed=$true}
 $results|ConvertTo-Json|Set-Content -LiteralPath (Join-Path $root 'widget-test.json') -Encoding UTF8
 $script:closing=$true;$win.Close()

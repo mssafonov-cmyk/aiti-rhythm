@@ -51,39 +51,35 @@ function QuotaReset($provider,$window){
 function HasFiveHour{
  foreach($provider in @('Codex','Claude')){if($null -ne (FiveHourRemaining $provider)){return $true}};return $false
 }
-function QuotaHeight($narrow){return 71+$(if($narrow){24}else{0})+$(if(HasFiveHour){8}else{0})+(AgyQuotaHeight)}
+function QuotaHeight($narrow){return 71+$(if($narrow -or (AgyGroup)){24}else{0})+$(if((HasFiveHour) -or (AgyBucket '5h' (AgyGroup))){8}else{0})}
 function DrawQuota($c,$narrow){
  $w=$c.Width;CardHeading $c 'ОСТАТОК НЕДЕЛИ' ''
- $gap=if($narrow){16}else{24};$half=($w-$gap)/2;$shift=if($narrow){24}else{0}
- $footer=58+$shift+$(if(HasFiveHour){8}else{0})
- for($i=0;$i -lt 2;$i++){
-  $provider=@('Codex','Claude')[$i];$left=WeeklyRemaining $provider;$short=FiveHourRemaining $provider;$x=$i*($half+$gap)
-  Put $c (Label $provider 11 '#939DA7') $x 24
-  $value=Label $(if($null -eq $left){'—'}else{'{0:0.#}%' -f $left}) 22 $(if($null -ne $left -and $left -le 15){'#E6B66B'}else{'#E5E8EB'})
-  $value.Name=$provider+'Remaining';$value.FontFamily='Bahnschrift';$value.Width=if($narrow){$half}else{$half-43};$value.TextAlignment=if($narrow){'Left'}else{'Right'}
-  $value.ToolTip=if($null -eq $left){'Недельная квота недоступна в выбранном источнике.'}else{'Остаток недельной квоты '+$provider}
-  Put $c $value $(if($narrow){$x}else{$x+43}) $(if($narrow){40}else{18})
-  $week=[Windows.Controls.ProgressBar]::new();$week.Name=$provider+'WeekBar';$week.Width=$half;$week.Height=3;$week.Maximum=100;$week.Value=if($null -eq $left){0}else{$left};$week.Foreground=Brush '#A8BECD';$week.Background=Brush '#343D47';$week.BorderThickness=0;$week.Opacity=if($null -eq $left){0.35}else{1};$week.ToolTip=$value.ToolTip;Put $c $week $x (50+$shift)
+ $group=AgyGroup;$providers=@('Codex','Claude');if($group){$providers+=@('Antigravity')}
+ $stacked=$narrow -or [bool]$group;$shift=if($stacked){24}else{0};$gap=if($group){12}elseif($narrow){16}else{24};$cell=($w-$gap*($providers.Count-1))/$providers.Count
+ $hasShort=(HasFiveHour) -or ($group -and $null -ne (AgyBucket '5h' $group));$footer=58+$shift+$(if($hasShort){8}else{0})
+ for($i=0;$i -lt $providers.Count;$i++){
+  $provider=$providers[$i];$agy=$provider -eq 'Antigravity';$x=$i*($cell+$gap);$stale=$false
+  if($agy){
+   $bucket=AgyBucket 'weekly' $group;$left=100*$bucket.remaining_fraction;$shortBucket=AgyBucket '5h' $group;$short=if($shortBucket){100*$shortBucket.remaining_fraction}else{$null};$stale=(NowSeconds)-$data.antigravity.quota_at -ge 600
+   $reset=if($bucket.reset_at){[DateTimeOffset]::FromUnixTimeSeconds([long]$bucket.reset_at).ToLocalTime()}else{$null}
+   $tip='Antigravity · '+$(if($group -eq 'gemini'){'Gemini'}else{'Другие модели'})+(' · неделя {0:0.#}%' -f $left)
+   foreach($period in @(@('weekly','неделя'),@('5h','5 часов'))){$b=AgyBucket $period[0] $group;if($b){$tip+="`n"+$period[1]+(' · {0:0.#}%' -f (100*$b.remaining_fraction));if($b.reset_at){$tip+=' · сброс '+[DateTimeOffset]::FromUnixTimeSeconds([long]$b.reset_at).ToLocalTime().ToString('dd.MM HH:mm')}}}
+   $tip+="`nПолучено от agy: "+[DateTimeOffset]::FromUnixTimeSeconds([long]$data.antigravity.quota_at).ToLocalTime().ToString('dd.MM HH:mm')+$(if($stale){"`n* Сохранённый остаток; откройте agy для обновления."}else{''})
+   $name=FlatButton ($(if($group -eq 'gemini'){'Gemini'}else{'Другие'})+' ▾') $cell {param($sender,$e) ShowAgyGroups $sender};$caption=Label ($(if($group -eq 'gemini'){'Gemini'}else{'Другие'})+' ▾') 11 '#939DA7';$caption.Width=$cell;$name.Content=$caption;$name.Name='AgyQuotaGroup';$name.Height=18;$name.FontSize=10;$name.HorizontalContentAlignment='Left';$name.Padding='0';$name.ToolTip=$tip;Put $c $name $x 22
+  }else{
+   $left=WeeklyRemaining $provider;$short=FiveHourRemaining $provider;$reset=QuotaReset $provider 'weekly';$tip=if($null -eq $left){'Недельная квота недоступна в выбранном источнике.'}else{'Остаток недельной квоты '+$provider};Put $c (Label $provider 11 '#939DA7') $x 24
+  }
+  $value=Label $(if($null -eq $left){'—'}else{('{0:0.#}%' -f $left)+$(if($stale){'*'}else{''})}) $(if($cell -lt 80){20}else{22}) $(if($stale){'#ADB8C3'}elseif($null -ne $left -and $left -le 15){'#E6B66B'}else{'#E5E8EB'})
+  $value.Name=$provider+'Remaining';$value.FontFamily='Bahnschrift';$value.Width=if($stacked){$cell}else{$cell-43};$value.TextAlignment=if($stacked){'Left'}else{'Right'};$value.ToolTip=$tip
+  Put $c $value $(if($stacked){$x}else{$x+43}) $(if($stacked){40}else{18})
+  $week=[Windows.Controls.ProgressBar]::new();$week.Name=$provider+'WeekBar';$week.Width=$cell;$week.Height=3;$week.Maximum=100;$week.Value=if($null -eq $left){0}else{$left};$week.Foreground=Brush $(if($agy){'#99DDAA'}else{'#A8BECD'});$week.Background=Brush '#343D47';$week.BorderThickness=0;$week.Opacity=if($null -eq $left){0.35}else{1};$week.ToolTip=$tip;Put $c $week $x (50+$shift)
   if($null -ne $short){
-   $bar=[Windows.Controls.ProgressBar]::new();$bar.Name=$provider+'FiveHour';$bar.Width=$half;$bar.Height=2;$bar.Maximum=100;$bar.Value=$short;$bar.Foreground=Brush $(if($short -le 15){'#E6B66B'}else{'#99ADA9'});$bar.Background=Brush $(if($short -eq 0){'#6A5030'}else{'#343D47'});$bar.BorderThickness=0
-   $shortReset=QuotaReset $provider 'session';$bar.ToolTip=('5 часов · остаток {0:0.#}%' -f $short)+$(if($shortReset){' · сброс '+$shortReset.ToString('dd.MM HH:mm')}else{' · дата сброса не передана'})
+   $bar=[Windows.Controls.ProgressBar]::new();$bar.Name=$provider+'FiveHour';$bar.Width=$cell;$bar.Height=2;$bar.Maximum=100;$bar.Value=$short;$bar.Foreground=Brush $(if($short -le 15){'#E6B66B'}else{'#99ADA9'});$bar.Background=Brush $(if($short -eq 0){'#6A5030'}else{'#343D47'});$bar.BorderThickness=0
+   if($agy){$bar.ToolTip=$tip}else{$shortReset=QuotaReset $provider 'session';$bar.ToolTip=('5 часов · остаток {0:0.#}%' -f $short)+$(if($shortReset){' · сброс '+$shortReset.ToString('dd.MM HH:mm')}else{' · дата сброса не передана'})}
    [Windows.Automation.AutomationProperties]::SetName($bar,('Пятичасовой лимит '+$provider));Put $c $bar $x (57+$shift)
   }
-  $reset=QuotaReset $provider 'weekly'
-  $text=if($null -eq $left){'Квота недоступна'}elseif($reset){'До '+$reset.ToString('dd.MM HH:mm')}else{'Дата не передана'}
-  $label=Label $text 9 '#939DA7';$label.Name=$provider+'Reset';$label.Width=$half;$label.ToolTip=if($reset){'Сброс недельной квоты: '+$reset.ToString('dd.MM.yyyy HH:mm')}else{'Источник передал расход, но не передал дату сброса недельной квоты.'};Put $c $label $x $footer
- }
- $group=AgyGroup
- if($group){
-  $top=(QuotaHeight $narrow)-44;$week=AgyBucket 'weekly' $group;$short=AgyBucket '5h' $group;$left=100*$week.remaining_fraction
-  $stale=(NowSeconds)-$data.antigravity.quota_at -ge 600
-  $tip='Antigravity · '+$(if($group -eq 'gemini'){'Gemini'}else{'Другие модели'})+(' · неделя: {0:0.#}%' -f $left)
-  foreach($period in @('weekly','5h')){$bucket=AgyBucket $period $group;if($bucket){$tip+="`n"+$(if($period -eq 'weekly'){'Неделя'}else{'5 часов'})+(' · остаток {0:0.#}%' -f (100*$bucket.remaining_fraction));if($bucket.reset_at){$tip+=' · сброс '+[DateTimeOffset]::FromUnixTimeSeconds([long]$bucket.reset_at).ToLocalTime().ToString('dd.MM HH:mm')}}}
-  $tip+="`nПолучено от agy: "+[DateTimeOffset]::FromUnixTimeSeconds([long]$data.antigravity.quota_at).ToLocalTime().ToString('dd.MM HH:mm')+$(if($stale){"`n* Сохранённый остаток; откройте agy для обновления."}else{''})
-  $choose=FlatButton ('Antigravity · '+$(if($group -eq 'gemini'){'Gemini'}else{'Другие'})+' ▾') ($w-58) {param($s,$e) ShowAgyGroups $s};$choose.Name='AgyQuotaGroup';$choose.Height=20;$choose.FontSize=10;$choose.ToolTip=$tip;Put $c $choose 0 ($top+4)
-  $value=Label (('{0:0.#}%' -f $left)+$(if($stale){'*'}else{''})) 14 $(if($stale){'#ADB8C3'}else{'#E5E8EB'});$value.Name='AntigravityRemaining';$value.Width=58;$value.TextAlignment='Right';$value.ToolTip=$tip;Put $c $value ($w-58) ($top+3)
-  $bar=[Windows.Controls.ProgressBar]::new();$bar.Name='AntigravityWeekBar';$bar.Width=$w;$bar.Height=3;$bar.Maximum=100;$bar.Value=$left;$bar.Background=Brush '#343D47';$bar.Foreground=Brush '#99DDAA';$bar.BorderThickness=0;$bar.ToolTip=$tip;Put $c $bar 0 ($top+27)
-  if($short){$bar=[Windows.Controls.ProgressBar]::new();$bar.Name='AntigravityFiveHour';$bar.Width=$w;$bar.Height=2;$bar.Maximum=100;$bar.Value=100*$short.remaining_fraction;$bar.Background=Brush $(if($bar.Value -eq 0){'#6A5030'}else{'#343D47'});$bar.Foreground=Brush '#A8BECD';$bar.BorderThickness=0;$bar.ToolTip=$tip;Put $c $bar 0 ($top+34)}
+  $text=if($null -eq $left){$(if($cell -lt 80){'Нет данных'}else{'Квота недоступна'})}elseif($reset){'До '+$reset.ToString($(if($cell -lt 80){'dd.MM'}else{'dd.MM HH:mm'}))}else{$(if($cell -lt 80){'Нет даты'}else{'Дата не передана'})}
+  $label=Label $text 9 '#939DA7';$label.Name=$provider+'Reset';$label.Width=$cell;$label.ToolTip=if($agy){$tip}elseif($reset){'Сброс недельной квоты: '+$reset.ToString('dd.MM.yyyy HH:mm')}else{'Источник не передал дату сброса недельной квоты.'};Put $c $label $x $footer
  }
 }
 function UsageData{
@@ -134,7 +130,7 @@ function DrawUsage($c,$y,$compact,$narrow){
  if($showDetails -or ($hot -and -not $compact)){
   $start=$y+130;$label=Label $(if($hot){'↑ Расход выше обычного'}else{'Сессия с наибольшим расходом'}) 9 $(if($hot){'#E6B66B'}else{'#AAB7C4'});$label.Width=$w;Put $c $label 0 ($start+2)
   $leaders=@($burn.leaders|Select-Object -First 1)
-  if($valid -and $leaders.Count){$lead=$leaders[0];$row=FlatButton '' $w {param($s,$e) OpenSession $s.Tag};$row.Name='TokenLeader';$row.Tag=$lead.id;$row.ToolTip=$lead.provider+' · '+$lead.title;$row.IsEnabled=(-not $lead.provider -or $lead.provider -eq 'Codex');$row.Height=21;$label=Label ($(if($lead.provider){$lead.provider+' · '}else{''})+$lead.title) 10 '#BFB7A8';$label.Width=$w;$row.Content=$label;Put $c $row 0 ($start+17)}else{$empty=Label 'Пока не определена' 10 '#939DA7';$empty.Width=$w;Put $c $empty 0 ($start+17)}
+  if($valid -and $leaders.Count){$lead=$leaders[0];$row=FlatButton '' $w {param($s,$e) OpenSession $s.Tag};$row.Name='TokenLeader';$row.Tag=$lead;$row.ToolTip=$lead.provider+' · '+$lead.title;$row.IsEnabled=([string]$lead.id -match '^[0-9a-f-]{36}$');$row.Height=21;$label=Label ($(if($lead.provider){$lead.provider+' · '}else{''})+$lead.title) 10 '#BFB7A8';$label.Width=$w;$row.Content=$label;Put $c $row 0 ($start+17)}else{$empty=Label 'Пока не определена' 10 '#939DA7';$empty.Width=$w;Put $c $empty 0 ($start+17)}
  }
 }
 
@@ -265,13 +261,13 @@ function DrawUnified{
  $scroll=[Windows.Controls.ScrollViewer]::new();$scroll.Name='SessionList';$scroll.Width=$w;$scroll.Height=[Math]::Max(28,$c.Height-24);$scroll.VerticalScrollBarVisibility='Hidden';$scroll.HorizontalScrollBarVisibility='Disabled';$stack=[Windows.Controls.StackPanel]::new();$scroll.Content=$stack;Put $c $scroll 0 24;$script:sessionScroll=$scroll
  $display=@($active);if($showCompleted){$display+=@($completed)}
  foreach($session in $display){
-  $row=FlatButton '' $w {param($s,$e) OpenSession $s.Tag};$row.Name='SessionRow';$row.Tag=$session.id;$row.Height=31;$row.Padding='0'
+  $row=FlatButton '' $w {param($s,$e) OpenSession $s.Tag};$row.Name='SessionRow';$row.Tag=$session;$row.Height=31;$row.Padding='0'
   $grid=[Windows.Controls.Grid]::new();$grid.Width=$w;$left=[Windows.Controls.ColumnDefinition]::new();$right=[Windows.Controls.ColumnDefinition]::new();$right.Width=[Windows.GridLength]::new(88);[void]$grid.ColumnDefinitions.Add($left);[void]$grid.ColumnDefinitions.Add($right)
   $line=[Windows.Controls.StackPanel]::new();$line.Orientation='Horizontal';$line.VerticalAlignment='Center';[void]$line.Children.Add((StatusGlyph $session.status));$name=if($session.title){$session.title}else{$session.project};$badge=Label $(switch($session.provider){'Antigravity'{'A'}'Claude'{'Cl'}default{'C'}}) 9 (ProviderColor $session.provider);$badge.Width=19;[void]$line.Children.Add($badge);$title=Label $name 11 '#E5E8EB';$title.Width=[Math]::Max(25,$w-129);[void]$line.Children.Add($title);[void]$grid.Children.Add($line)
   $status=switch($session.status){'waiting'{'ждёт вас'}'working'{'работает'}'idle'{'завершена'}default{'неизвестно'}};$color=switch($session.status){'waiting'{'#76B6EF'}'working'{'#99ADA9'}'idle'{'#E6B66B'}default{'#939DA7'}}
   if($session.rate.level -in @('warning','critical')){$status='↑ расход ×'+$session.rate.ratio;$color='#E6B66B'}
   $state=Label $status 10 $color;$state.VerticalAlignment='Center';$state.TextAlignment='Right';[Windows.Controls.Grid]::SetColumn($state,1);[void]$grid.Children.Add($state);$row.Content=$grid;$row.ToolTip=$session.provider+' · '+$name
-  $row.IsEnabled=$session.provider -eq 'Codex' -and $session.id -match '^[0-9a-f-]{36}$';[void]$stack.Children.Add($row)
+  $row.IsEnabled=$session.id -match '^[0-9a-f-]{36}$';[void]$stack.Children.Add($row)
  }
  if(-not $display.Count){[void]$stack.Children.Add((Label $(if($stale){'Список сессий устарел'}else{'Нет активных сессий'}) 12 '#939DA7'))};$scroll.ScrollToVerticalOffset($offset)
  }

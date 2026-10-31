@@ -126,13 +126,6 @@ function Ring($panel,$cx,$cy,$value,$color,$name){
  $t=Label $name 12 $color $true;$t.Width=130;$t.TextAlignment='Center';Put $panel $t ($cx-65) ($cy-66)
 }
 function SelectPage($n){$script:page=$n;$script:changed=Get-Date;Draw;SaveState}
-function OpenSession($id){
- if($id -notmatch '^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$'){return}
- $url='codex://threads/'+$id
- if($SelfTest){$script:testSessionUrl=$url;return}
- try{Start-Process -FilePath $url; $script:notice='Открываю выбранный чат…';$script:noticeAt=Get-Date;Add-Content -LiteralPath $logPath -Value ((Get-Date -Format o)+' open '+$url)}catch{$script:notice='Не удалось открыть Codex';Add-Content -LiteralPath $logPath -Value $_.Exception.Message}
- $Foot.Text=$notice
-}
 function MeetingUrl($value){
  try{
   $u=[Uri]$value
@@ -156,6 +149,7 @@ function MeetingAction($value,$copy=$false){
  $script:noticeAt=Get-Date;$Foot.Text=$notice
 }
 . (Join-Path $assetRoot 'unified.ps1')
+. (Join-Path $assetRoot 'notifications.ps1')
 function Draw { DrawUnified }
 $DragBar.Add_MouseLeftButtonDown({param($sender,$e) if(-not $locked -and $e.OriginalSource -isnot [Windows.Controls.Button]){try{$win.DragMove();FitScreen;SaveState}catch{}}})
 $Pin.Add_Click({$script:locked=-not $locked;$Pin.Content=if($locked){'◆'}else{'◇'};$DragBar.Cursor=if($locked){'Arrow'}else{'SizeAll'};SaveState})
@@ -189,6 +183,7 @@ foreach($minutes in @(15,30,60)){$mi=[Windows.Controls.MenuItem]::new();$mi.Head
 $null=MenuItem 'Выключить приложение' {$script:closing=$true;$win.Close()}
 $Options.Add_Click({$completedMenu.IsChecked=$showCompleted;$lockMenu.IsChecked=$locked;$opacityMenu.Header='Прозрачность фона: '+[Math]::Round(100*(255-$bgAlpha)/255)+'%';$rateMenu.Header='Окно скорости: '+$(if($data.codex.burn.window_seconds){[int]($data.codex.burn.window_seconds/60)}else{15})+' мин';$menu.PlacementTarget=$Options;$menu.IsOpen=$true})
 $tray=[Windows.Forms.NotifyIcon]::new();$tray.Icon=[System.Drawing.Icon]::new((Join-Path $assetRoot 'indicators.ico'));$tray.Text='АйТи:Ритм';$tray.Visible=-not $SelfTest
+$tray.Add_BalloonTipClicked({if($script:balloonTarget.id){OpenSession $script:balloonTarget}else{$win.Show();[void]$win.Activate()}})
 $win.Icon=[Windows.Media.Imaging.BitmapFrame]::Create([Uri](Join-Path $assetRoot 'indicators.ico'))
 $tray.Add_DoubleClick({$win.Show();FitScreen;[void]$win.Activate()})
 $trayMenu=[Windows.Forms.ContextMenuStrip]::new();$null=$trayMenu.Items.Add('Показать');$trayMenu.Items[0].Add_Click({$win.Show();FitScreen;[void]$win.Activate()});$null=$trayMenu.Items.Add('Выключить АйТи:Ритм');$trayMenu.Items[1].Add_Click({$script:closing=$true;$win.Close()});$tray.ContextMenuStrip=$trayMenu
@@ -204,6 +199,8 @@ function Tick{
  try{
   $stopSignal=Join-Path $root 'widget-stop.signal'
   if(-not $SelfTest -and (Test-Path -LiteralPath $stopSignal)){Remove-Item -LiteralPath $stopSignal;$script:closing=$true;$win.Close();return}
+  $navigationSignal=Join-Path $root 'notification-open.signal'
+  if(-not $SelfTest -and (Test-Path -LiteralPath $navigationSignal)){$target=Get-Content -LiteralPath $navigationSignal -Raw|ConvertFrom-Json;Remove-Item -LiteralPath $navigationSignal;OpenSession $target}
   $showSignal=Join-Path $root 'widget-show.signal'
   if(-not $SelfTest -and (Test-Path -LiteralPath $showSignal)){Remove-Item -LiteralPath $showSignal;$win.Show();FitScreen;[void]$win.Activate()}
   if($notice -and ((Get-Date)-$noticeAt).TotalSeconds -gt 5){$script:notice=''}
@@ -215,7 +212,7 @@ function Tick{
   $script:urgent=$urgentNow
   $usage=UsageData;$hot=(Fresh $usage 180) -and $usage.burn.alert
   UpdateCardSignals;UpdateFreshnessIndicator
-  if($hot -and -not $SelfTest -and (NowSeconds)-$lastBurnNotice -gt 600){$tray.ShowBalloonTip(5000,'Расход токенов ускорился',(BurnNoticeText $usage.burn),[Windows.Forms.ToolTipIcon]::Warning);$script:lastBurnNotice=NowSeconds}
+  if($hot -and -not $SelfTest -and (NowSeconds)-$lastBurnNotice -gt 600){if(ShowBurnNotice $usage.burn){$script:lastBurnNotice=NowSeconds}}
   # Freeze interactive controls under the pointer; explicit clicks redraw immediately.
   if($Body.Children.Count -eq 0 -or (-not $win.IsMouseOver -and [Windows.Input.Mouse]::LeftButton -ne 'Pressed')){Draw}
   FitScreen

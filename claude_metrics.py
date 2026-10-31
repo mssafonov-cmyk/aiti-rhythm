@@ -38,6 +38,7 @@ def metadata_rows(path, now):
             ask = isinstance(content, list) and any(v.get('name') == 'AskUserQuestion' for v in content if isinstance(v, dict))
             entry['rows'].append(dict(kind=raw.get('type'), subtype=raw.get('subtype'), at=dt.timestamp(),
                 sid=raw.get('sessionId'), project=Path(raw.get('cwd') or '').name,
+                ide=(raw.get('entrypoint') in ('vscode','claude-vscode')) if 'entrypoint' in raw else None,
                 mid=message.get('id'), usage={key: value for key, value in (message.get('usage') or {}).items()
                 if key in ('input_tokens','output_tokens','cache_read_input_tokens','cache_creation_input_tokens')},
                 stop=message.get('stop_reason'), ask=ask))
@@ -60,10 +61,12 @@ def claude_local(home, now=None, window_seconds=900):
             continue
         seen.add(path)
         state, at, sid, project = 'unknown', 0, path.stem, path.parent.name
+        navigation={'kind':'manual'}
         for row in metadata_rows(path, now):
             if row['at'] > now:
                 continue
             sid, project = row['sid'] or sid, row['project'] or project
+            if row.get('ide') is not None:navigation={'kind':'claude_vscode' if row['ide'] else 'manual'}
             if row['kind'] == 'user':
                 state, at = 'working', row['at']
             elif row['kind'] == 'assistant':
@@ -78,7 +81,7 @@ def claude_local(home, now=None, window_seconds=900):
         if state == 'working' and now - at > 1800:
             state = 'unknown'
         if datetime.fromtimestamp(at, MSK).date() == day or state in ('working', 'waiting'):
-            sessions.append(dict(provider='Claude', id=str(sid), project=project, title=project, status=state, at=at))
+            sessions.append(dict(provider='Claude', id=str(sid), project=project, title=project, status=state, at=at,navigation=navigation))
     for path in list(_cache):
         if path not in seen:
             del _cache[path]

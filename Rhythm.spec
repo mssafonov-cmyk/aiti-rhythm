@@ -4,7 +4,7 @@ from pathlib import Path
 import json
 
 root = Path(SPECPATH)
-datas = [(str(root / name), '.') for name in ('widget.ps1','unified.ps1','connections.ps1',
+datas = [(str(root / name), '.') for name in ('widget.ps1','unified.ps1','notifications.ps1','connections.ps1',
          'unified-test.ps1','claude_usage.py','indicators.ico','LICENSE','THIRD-PARTY-NOTICES.md','build-info.json')]
 datas += collect_data_files('tzdata')
 for package in ('Pillow','icalendar','recurring-ical-events','caldav'):

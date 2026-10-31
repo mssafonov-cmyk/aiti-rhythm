@@ -1,5 +1,5 @@
 #ifndef Version
-#define Version "1.4.0"
+#define Version "1.5.0"
 #endif
 [Setup]
 AppId={{C3878BC6-5661-4EF2-9444-402206FE98F3}
@@ -35,11 +35,16 @@ Name: "autostart"; Description: "Запускать АйТи:Ритм при в�
 Source: "dist\Rhythm\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
-Name: "{group}\АйТи Ритм"; Filename: "{app}\Rhythm.exe"
+Name: "{group}\АйТи Ритм"; Filename: "{app}\Rhythm.exe"; AppUserModelID: "AITI.Rhythm"; AppUserModelToastActivatorCLSID: "4CBE1BC9-68F4-48D6-A308-3168C614D8C2"
 Name: "{userdesktop}\АйТи Ритм"; Filename: "{app}\Rhythm.exe"; Tasks: desktopicon
 
 [Registry]
 Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "AITIRhythm"; ValueData: """{app}\Rhythm.exe"""; Tasks: autostart; Flags: uninsdeletevalue
+
+Root: HKCU; Subkey: "Software\Classes\aiti-rhythm"; ValueType: string; ValueData: "URL:AITI Rhythm notification"; Flags: uninsdeletekey
+Root: HKCU; Subkey: "Software\Classes\aiti-rhythm"; ValueType: string; ValueName: "URL Protocol"; ValueData: ""
+Root: HKCU; Subkey: "Software\Classes\aiti-rhythm\DefaultIcon"; ValueType: string; ValueData: "{app}\Rhythm.exe,0"
+Root: HKCU; Subkey: "Software\Classes\aiti-rhythm\shell\open\command"; ValueType: string; ValueData: """{app}\Rhythm.exe"" --notification ""%1"""
 
 [Run]
 Filename: "{app}\Rhythm.exe"; Description: "Открыть АйТи:Ритм"; Flags: nowait postinstall skipifsilent

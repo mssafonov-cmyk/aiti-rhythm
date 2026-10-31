@@ -86,9 +86,10 @@ def codex_local(home=None):
     source_home=Path(home) if home is not None else Path.home()/'.codex'
     index=source_home/'session_index.jsonl'
     titles={r.get('id'):r.get('thread_name','') for r in records(index)} if index.exists() else {}
-    for p in (source_home/'sessions').rglob('*.jsonl'):
+    from session_navigation import codex_navigation
+    for p in sorted((source_home/'sessions').rglob('*.jsonl'),key=lambda path:path.stat().st_mtime,reverse=True):
         if p.stat().st_mtime < now.timestamp()-7*86400: continue
-        prev = {}; state = 'unknown'; last = 0; project = ''; sid = str(p)
+        prev = {}; state = 'unknown'; last = 0; project = ''; sid = str(p);navigation={'kind':'manual'}
         sums = dict(input=0,output=0,cache=0);points=[];status=SessionState()
         for r in session_records(p):
             try: payload=r.get('payload',{}); dt=stamp(r['timestamp'])
@@ -96,6 +97,7 @@ def codex_local(home=None):
             status.consume(r,dt)
             if r.get('type')=='session_meta':
                 sid=payload.get('id',sid); project=Path(payload.get('cwd','')).name
+                navigation=codex_navigation(payload)
                 # Fork histories can contain parent totals: never charge their initial snapshot.
                 if payload.get('forked_from_id'): prev={'_fork':True}
             if r.get('type')!='event_msg': continue
@@ -121,7 +123,7 @@ def codex_local(home=None):
         all_points.extend(points)
         rate=velocity(points,now.timestamp(),window)
         if sums['input']+sums['output']:
-            consumers.append(dict(id=sid,title=titles.get(sid,project),project=project,
+            consumers.append(dict(id=sid,title=titles.get(sid,project),project=project,navigation=navigation,
                                   day_tokens=sums['input']+sums['output'],**rate))
         for k in totals: totals[k]+=sums[k]
         state=status.status;last=status.at
@@ -129,7 +131,7 @@ def codex_local(home=None):
             # Never infer waiting from silence. Old unfinished turns are explicitly unknown.
             if state=='working' and time.time()-p.stat().st_mtime>1800: state='unknown'
             sessions.append(dict(provider='Codex',project=project,status=state,at=last,
-                                 id=sid,title=titles.get(sid,project),rate=rate))
+                                 id=sid,title=titles.get(sid,project),rate=rate,navigation=navigation))
     consumers.sort(key=lambda v:(v['per_min'],v['day_tokens']),reverse=True)
     overall=velocity(all_points,now.timestamp(),window)
     overall['alert']=overall['level'] in ('warning','critical') or any(v['level'] in ('warning','critical') for v in consumers)

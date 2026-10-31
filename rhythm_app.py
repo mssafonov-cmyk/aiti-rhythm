@@ -31,6 +31,8 @@ def own_process(pid, program):
 
 
 def main():
+    from session_navigation import valid_activation_args
+    if not valid_activation_args(sys.argv[1:]):return 2
     if sys.stdout is not None:
         sys.stdout.reconfigure(encoding='utf-8')
     if sys.stderr is not None:
@@ -53,6 +55,7 @@ def main():
     parser.add_argument('--agy-profile')
     parser.add_argument('--agy-profile-b64')
     parser.add_argument('--remove-antigravity-capture', action='store_true')
+    parser.add_argument('--notification')
     args = parser.parse_args()
     if args.data_dir_b64 or args.agy_profile_b64:
         import base64
@@ -69,6 +72,12 @@ def main():
     build_file = ASSETS / 'build-info.json'
     build_info = json.loads(build_file.read_text(encoding='utf-8')) if build_file.exists() else {}
     os.environ['RHYTHM_BUILD_COMMIT'] = build_info.get('source_commit', 'source')
+    if args.notification:
+        from session_navigation import activate
+        try:
+            if activate(DATA, args.notification, os.startfile):return 0
+        except (OSError,ValueError,TypeError,KeyError):
+            (DATA/'widget-show.signal').write_text('show')
     if args.agy_statusline:
         from antigravity_quota import statusline
         if not args.agy_profile:
