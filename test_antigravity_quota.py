@@ -64,7 +64,9 @@ class QuotaTests(unittest.TestCase):
         manage(self.root,self.home,True,[sys.executable,str(Path(__file__).with_name('rhythm_app.py'))])
         wrapper=paths(self.root,self.home)[1]
         shell=str(Path(os.environ['SystemRoot'])/'System32/cmd.exe')
-        raw=json.dumps(self.payload(),ensure_ascii=False).encode('utf-8')
+        payload=self.payload()
+        payload['quota']['gemini-5h']=dict(remaining_fraction=0,reset_in_seconds=18000)
+        raw=json.dumps(payload,ensure_ascii=False).encode('utf-8')
         native_command=json.loads((self.home/'settings.json').read_text())['statusLine']['command']
         result=subprocess.run([shell,'/c',native_command],input=raw,capture_output=True,timeout=20)
         self.assertEqual(result.returncode,0,result.stderr.decode(errors='replace'))
