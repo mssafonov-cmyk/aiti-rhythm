@@ -332,5 +332,17 @@ Click $historyProviderButtons[2]
 if($historyTitle.Text -ne 'Antigravity' -or $historyTotal.Text -ne 'от 50'){throw 'Provider chips must retain the period and show that provider only'}
 $historyWindow.Close()
 $results+=@{checks='history tile hit tests;7/30/all sums;four provider chips;combined partial total;comparison scale;daily scroll;empty;680px';passed=$true}
+$script:showDetails=$false;$data.view.compact_usage=$false
+$providers=@();$i=0
+foreach($name in @('Codex','Claude','Antigravity')){
+ $providers+=[pscustomobject]@{name=$name;day_tokens=1200;per_min=20;cached_series=($name -eq 'Claude');series=@([pscustomobject]@{at=$now-1800;per_min=0},[pscustomobject]@{at=$now-900;per_min=(20+$i*20)},[pscustomobject]@{at=$now;per_min=0})};$i++
+}
+$data|Add-Member -NotePropertyName usage -NotePropertyValue ([pscustomobject]@{providers=$providers;observed=$true;checked_at=$now;burn=[pscustomobject]@{per_min=60;window_seconds=900;leaders=@()}}) -Force
+$win.Width=380;Draw;$win.UpdateLayout()
+foreach($name in @('Codex','Claude','Antigravity')){if(-not (Control ('GraphLegend'+$name)) -or (Control ('Graph'+$name)).Stroke.ToString() -ne (Brush (ProviderColor $name)).ToString()){throw ('Missing consistent series/legend '+$name)}}
+if((Control 'GraphClaude').StrokeDashArray.Count -ne 2){throw 'Saved series must be dashed'}
+Preview 'rhythm-three-series.png'
+$win.Width=260;Draw;$win.UpdateLayout();Preview 'rhythm-three-series-narrow.png'
+$results+=@{checks='three provider lines and permanent matching legends; cached line dashed;380/260 DIP';passed=$true}
 $results|ConvertTo-Json|Set-Content -LiteralPath (Join-Path $root 'widget-test.json') -Encoding UTF8
 $script:closing=$true;$win.Close()

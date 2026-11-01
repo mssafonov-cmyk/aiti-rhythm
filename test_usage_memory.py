@@ -25,6 +25,39 @@ class DailyMemoryTests(unittest.TestCase):
     def provider(self, snapshot, now=None):
         return next(p for p in combined_usage(snapshot, self.now if now is None else now)['providers'] if p['key']=='claude')
 
+    def test_remote_series_deduplicates_messages_without_changing_quota_or_totals(self):
+        from legacy_bridge import with_daily_series
+        import io, contextlib
+        from datetime import datetime, timezone
+        home=self.root/'home'; projects=home/'.claude/projects';projects.mkdir(parents=True)
+        row=dict(type='assistant',timestamp=datetime.fromtimestamp(self.now-60,timezone.utc).isoformat(),
+                 message=dict(id='one',usage=dict(input_tokens=90,output_tokens=30)))
+        (projects/'a.jsonl').write_text(json.dumps(row)+'\n'+json.dumps(row)+'\n')
+        source="import json\nprint(json.dumps("+repr(dict(checked_at=self.now,tokens=dict(input=90,output=30),limits={'test':1}))+"))"
+        output=io.StringIO()
+        with patch('pathlib.Path.home',return_value=home),contextlib.redirect_stdout(output):
+            exec(with_daily_series(source),{})
+        value=json.loads(output.getvalue())
+        self.assertEqual(value['tokens'],dict(input=90,output=30))
+        self.assertEqual(value['limits'],{'test':1})
+        self.assertEqual(sum(r['tokens'] for r in value['burn']['series']),120)
+
+    def test_series_survives_failure_restart_regression_and_resets_with_day(self):
+        m=DailyUsageMemory(self.root); sample=self.sample()
+        sample['claude']['burn']['series']=[dict(at=self.now-60,tokens=120,per_min=8)]
+        m.enrich(sample,self.ids,self.now)
+        failed={'claude':{'enabled':True,'error':'offline'}}
+        p=self.provider(DailyUsageMemory(self.root).enrich(failed,self.ids,self.now+1),self.now+1)
+        self.assertEqual(p['series'][0]['tokens'],120)
+        self.assertTrue(p['cached_series']);self.assertIsNone(p['per_min'])
+        sample['claude']['tokens']['input']=90
+        sample['claude']['burn']['series'][0]['tokens']=90
+        p=self.provider(m.enrich(sample,self.ids,self.now+2),self.now+2)
+        self.assertEqual(p['series'][0]['tokens'],120)
+        tomorrow=day_start_msk(self.now)+86401
+        p=self.provider(m.enrich(failed,self.ids,tomorrow),tomorrow)
+        self.assertEqual(p['series'],[])
+
     def test_error_stale_restart_and_recovery_keep_daily_not_old_rate(self):
         memory = DailyUsageMemory(self.root)
         memory.enrich(self.sample(), self.ids, self.now)

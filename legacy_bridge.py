@@ -1,4 +1,5 @@
 """Optional compatibility with a user's existing read-only collector, never shipped settings."""
+import ast
 import importlib.util
 import hashlib
 import json
@@ -25,6 +26,46 @@ def read_token_history(root):
         return module.claude_remote()
     finally:
         sys.path.remove(str(source.parent))
+
+
+def with_daily_series(source):
+    """Add journal metrics to the existing SSH read; no extra quota request."""
+    tree = ast.parse(source)
+    call = tree.body[-1].value
+    if not (isinstance(call, ast.Call) and isinstance(call.func, ast.Name) and call.func.id == 'print'):
+        return source
+    result = call.args[0].args[0]
+    reader = (Path(__file__).parent / 'history_readers.py').read_text(encoding='utf-8-sig')
+    burn = (Path(__file__).parent / 'burn.py').read_text(encoding='utf-8-sig')
+    prefix = "_rhythm_metrics={}\nexec("+repr(reader+'\n'+burn)+",_rhythm_metrics)\n"
+    prefix += """
+def _rhythm_daily(value):
+    now=value['checked_at']; start=_rhythm_metrics['day_start_msk'](now)
+    home=__import__('pathlib').Path.home()/'.claude/projects'
+    if not home.is_dir():
+        value['status']='journals_not_found'
+        return value
+    messages={}
+    for path in home.rglob('*.jsonl'):
+        if path.stat().st_mtime < start: continue
+        item=_rhythm_metrics['file_usage'](path,'claude',now)
+        for mid,row in item['messages'].items():
+            if not start <= row['at'] <= now: continue
+            old=messages.setdefault(mid,{'at':row['at'],'usage':{}})
+            for key,count in row['usage'].items():old['usage'][key]=max(old['usage'].get(key,0),count)
+    points=[]
+    for row in messages.values():
+        u=row['usage']; cache=u.get('cache_read_input_tokens',0)
+        inp=u.get('input_tokens',0)+u.get('cache_creation_input_tokens',0)+cache
+        out=u.get('output_tokens',0)
+        points.append((row['at'],inp+out,inp-cache+out))
+    rate=_rhythm_metrics['velocity'](points,now,900)
+    rate.update(series=_rhythm_metrics['day_series'](points,now),leaders=[],alert=False)
+    value.update(burn=rate)
+    return value
+"""
+    call.args[0].args[0] = ast.Call(func=ast.Name(id='_rhythm_daily', ctx=ast.Load()), args=[result], keywords=[])
+    return prefix + ast.unparse(ast.fix_missing_locations(tree))
 
 
 def read(root, provider, data_root):
@@ -66,7 +107,7 @@ def read(root, provider, data_root):
     original_ssh = getattr(module, 'ssh', None)
     if original_ssh:
         def reader_ssh(host, source, *args, **kwargs):
-            return original_ssh(host, with_reset_metadata_source(source, state), *args, **kwargs)
+            return original_ssh(host, with_daily_series(with_reset_metadata_source(source, state)), *args, **kwargs)
         module.ssh = reader_ssh
     try:
         result = module.claude_remote() if original_ssh else preserve_reset_metadata(module.claude_remote, state)

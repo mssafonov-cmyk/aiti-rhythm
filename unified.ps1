@@ -150,7 +150,7 @@ function TokenAmount($n){
  if($n -ge 1e6){return ('{0:0.#} млн' -f ($n/1e6))};if($n -ge 1e3){return ('{0:0.#} тыс' -f ($n/1e3))};return ('{0:0}' -f $n)
 }
 function DetailsExpanded($compact){return ([bool]$showDetails -xor (-not $compact))}
-function UsageHeight($compact,$hot){if(DetailsExpanded $compact){return 145};return 0}
+function UsageHeight($compact,$hot){if(DetailsExpanded $compact){return 165};return 0}
 function DrawUsage($c,$y,$compact,$narrow){
  if(-not (DetailsExpanded $compact)){return}
  $w=$c.Width;$usage=UsageData;$burn=$usage.burn;$valid=(Fresh $usage 180) -and $usage.observed;$hot=$valid -and $burn.alert
@@ -164,16 +164,19 @@ function DrawUsage($c,$y,$compact,$narrow){
   $caption=Label 'Скорость за день' 9 '#AAB7C4';$caption.Width=$w*0.55;Put $c $caption 0 ($y+29)
   $allBars=@($providers|ForEach-Object {$_.series});$peak=($allBars|Measure-Object per_min -Maximum).Maximum
   $scale=Label $(if($null -ne $peak){'до '+(TokenAmount $peak)+'/мин'}else{'нет истории'}) 9 '#AAB7C4';$scale.Width=$w*0.45;$scale.TextAlignment='Right';Put $c $scale ($w*0.55) ($y+29)
+  $timeline=@($allBars|Where-Object {$null -ne $_.at}|Sort-Object at);$firstAt=if($timeline.Count){[double]$timeline[0].at}else{0};$lastAt=if($timeline.Count){[double]$timeline[-1].at}else{1}
   $count=($providers|ForEach-Object {@($_.series).Count}|Measure-Object -Maximum).Maximum
   foreach($p in $providers){$bars=@($p.series|Where-Object {$null -ne $_});if(-not $bars.Count){continue}
-   $spark=[Windows.Shapes.Polyline]::new();$spark.Name='Graph'+$p.name;$spark.ToolTip=$p.name+' · ток/мин · интервалы 15 мин · общая шкала';$spark.Stroke=Brush $p.color;$spark.StrokeThickness=1.2
-   for($j=0;$j -lt $bars.Count;$j++){$v=if($peak -gt 0){26*$bars[$j].per_min/$peak}else{0};[void]$spark.Points.Add([Windows.Point]::new(($w-2)*$j/[Math]::Max(1,$count-1),26-$v))};Put $c $spark 0 ($y+46)
+   $spark=[Windows.Shapes.Polyline]::new();$spark.Name='Graph'+$p.name;$spark.ToolTip=$p.name+' · ток/мин · интервалы 15 мин · общая шкала';$spark.Stroke=Brush (ProviderColor $p.name);$spark.StrokeThickness=1.2
+   if($p.cached_series){$spark.StrokeDashArray=[Windows.Media.DoubleCollection]::new();$spark.StrokeDashArray.Add(3);$spark.StrokeDashArray.Add(2)}
+   for($j=0;$j -lt $bars.Count;$j++){$v=if($peak -gt 0){26*$bars[$j].per_min/$peak}else{0};[void]$spark.Points.Add([Windows.Point]::new(($w-2)*([double]$bars[$j].at-$firstAt)/[Math]::Max(1,$lastAt-$firstAt),26-$v))};Put $c $spark 0 ($y+46)
   }
+  $legendIndex=0;foreach($p in $providers){$legend=Label ($p.name+$(if(-not @($p.series).Count){' —'}elseif($p.cached_series){'*'}else{''})) 9 (ProviderColor $p.name);$legend.Name='GraphLegend'+$p.name;$legend.Width=$w/3;$legend.ToolTip=$p.name+$(if(-not @($p.series).Count){': история скорости недоступна'}elseif($p.cached_series){': сохранённая история, пунктир; текущая скорость неизвестна или данные неполны'}else{': токенов в минуту'});Put $c $legend ($legendIndex*$w/3) ($y+89);$legendIndex++}
   $dates=@($allBars|Where-Object {$null -ne $_.at}|Sort-Object at)
   if($dates.Count){foreach($end in @(0,1)){$stamp=if($end){$dates[-1].at}else{$dates[0].at};$label=Label ([DateTimeOffset]::FromUnixTimeSeconds([long]$stamp).ToOffset([TimeSpan]::FromHours(3)).ToString('HH:mm')) 8 '#939DA7';$label.Width=$w/2;$label.TextAlignment=if($end){'Right'}else{'Left'};Put $c $label ($end*$w/2) ($y+74)}}
  }
  if(DetailsExpanded $compact){
-  $start=$y+90;$label=Label $(if($hot){'↑ Расход выше обычного'}else{'Сессия с наибольшим расходом'}) 9 $(if($hot){'#E6B66B'}else{'#AAB7C4'});$label.Width=$w;Put $c $label 0 ($start+2)
+  $start=$y+110;$label=Label $(if($hot){'↑ Расход выше обычного'}else{'Сессия с наибольшим расходом'}) 9 $(if($hot){'#E6B66B'}else{'#AAB7C4'});$label.Width=$w;Put $c $label 0 ($start+2)
   $leaderHeading=$label
   $leaders=@($burn.leaders|Select-Object -First 1)
   if($valid -and $leaders.Count){$lead=$leaders[0];$row=FlatButton '' $w {param($s,$e) OpenSession $s.Tag};$row.Name='TokenLeader';$row.Tag=$lead;$row.ToolTip=$lead.provider+' · '+$lead.title;$row.IsEnabled=([string]$lead.id -match '^[0-9a-f-]{36}$');$row.Height=35;$label=Label ($(if($lead.provider){$lead.provider+' · '}else{''})+$lead.title) 10 '#BFB7A8';$label.Width=$w;$detail=if($burn.leader_basis -eq 'day'){(TokenAmount $lead.day_tokens)+' за день'}else{(TokenAmount $lead.per_min)+' ток/мин'};$label.Text+=' · '+$detail;$row.Content=$label;Put $c $row 0 ($start+17)}else{$empty=Label 'Пока не определена' 10 '#939DA7';$empty.Width=$w;Put $c $empty 0 ($start+17)}

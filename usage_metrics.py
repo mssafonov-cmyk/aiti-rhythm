@@ -17,6 +17,14 @@ def known_source(source, now):
             and source.get('status') not in ('journals_not_found', 'not_installed'))
 
 
+def valid_series(rows, now):
+    start = day_start_msk(now)
+    return [dict(at=r["at"], tokens=r["tokens"], per_min=round(r["tokens"]/15))
+            for r in rows if isinstance(r, dict)
+            and type(r.get("at")) in (int, float) and start <= r["at"] <= now
+            and type(r.get("tokens")) in (int, float) and math.isfinite(r["tokens"]) and r["tokens"] >= 0]
+
+
 def day_total(source, key, now):
     if not known_source(source, now) or (key == 'antigravity' and not source.get('observed')):
         return None
@@ -44,7 +52,7 @@ class DailyUsageMemory:
                             and type(value.get('total')) is int and value['total'] >= 0
                             and type(value.get('at')) in (int, float) and math.isfinite(value['at'])
                             and self.day <= value['at'] < self.day+86400):
-                        self.entries[key] = dict(identity=value['identity'], total=value['total'], at=value['at'], partial=value.get('partial') is True)
+                        self.entries[key] = dict(identity=value['identity'], total=value['total'], at=value['at'], partial=value.get('partial') is True, series=valid_series(value.get('series', []), self.day+86399))
         except (OSError, ValueError, TypeError, AttributeError):
             pass
 
@@ -62,13 +70,22 @@ class DailyUsageMemory:
             if source.get('enabled') is False or not identity:
                 continue
             total = day_total(source, key, now)
+            prior_series = (old or {}).get('series', [])
+            current_series = valid_series((source.get('burn') or {}).get('series', []), now) if total is not None else []
+            merged = {r['at']: r for r in prior_series}
+            for row in current_series:
+                if row['tokens'] >= merged.get(row['at'], {}).get('tokens', 0):
+                    merged[row['at']] = row
+            series = sorted(merged.values(), key=lambda r: r['at'])
             if total is not None and (old is None or total >= old['total']):
-                new = dict(identity=identity, total=total, at=source['checked_at'], partial=bool(source.get('usage_partial')))
+                new = dict(identity=identity, total=total, at=source['checked_at'], partial=bool(source.get('usage_partial')), series=series)
                 if new != old:
                     self.entries[key] = new; self.dirty = True
                 old = new
+            if series:
+                result[key] = dict(source, series_memory=series, series_cached=not current_series or series != current_series)
             if old and (total is None or total < old['total']):
-                result[key] = dict(source, day_memory=dict(total=old['total'], at=old['at'], partial=old.get('partial', False)))
+                result[key] = dict(result.get(key, source), day_memory=dict(total=old['total'], at=old['at'], partial=old.get('partial', False)))
                 if key == 'antigravity' and 'available' not in source:
                     result[key]['available'] = True
         if self.dirty and now >= self.next_save:
@@ -92,8 +109,8 @@ def combined_usage(snapshot, now):
                  and (key != 'antigravity' or source.get('observed')))
         tokens, burn = source.get('tokens'), source.get('burn') or {}
         rate = burn.get('per_min') if known and source.get('observed') else None
-        series = burn.get('series', []) if known and source.get('observed') else []
-        providers.append(dict(key=key, name=name, short=short, color=color, series=series,
+        series = source.get('series_memory') or (valid_series(burn.get('series', []), now) if known else [])
+        providers.append(dict(key=key, name=name, short=short, color=color, series=series, cached_series=bool(source.get('series_cached') or not known),
                               partial=bool(held.get('partial', source.get('usage_partial'))),
                               cached_day=bool(held), day_updated_at=held.get('at', source.get('checked_at')),
                               day_tokens=held.get('total') if held else day_total(source, key, now),
