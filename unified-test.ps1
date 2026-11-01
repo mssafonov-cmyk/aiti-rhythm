@@ -1,5 +1,5 @@
 ﻿if(-not $data){$script:data=[pscustomobject]@{}}
-$data|Add-Member -NotePropertyName view -NotePropertyValue ([pscustomobject]@{auto_height=$false;compact_usage=$false}) -Force
+$data|Add-Member -NotePropertyName view -NotePropertyValue ([pscustomobject]@{auto_height=$false;compact_usage=$false;calendar=$false;sessions=$true;limits=$false;usage=$false}) -Force
 $win.Show();Tick;$win.UpdateLayout();Draw;$results=@()
 function FindControl($root,$name){
  if($root -is [Windows.FrameworkElement] -and $root.Name -eq $name){return $root}
@@ -11,9 +11,10 @@ function Preview($name){
  $win.UpdateLayout();$bmp=[Windows.Media.Imaging.RenderTargetBitmap]::new([int]$win.ActualWidth,[int]$win.ActualHeight,96,96,[Windows.Media.PixelFormats]::Pbgra32);$bmp.Render($win)
  $encoder=[Windows.Media.Imaging.PngBitmapEncoder]::new();$encoder.Frames.Add([Windows.Media.Imaging.BitmapFrame]::Create($bmp));$file=[IO.File]::Create((Join-Path $root $name));$encoder.Save($file);$file.Dispose()
 }
-$win.Width=380;$win.Height=580;$win.UpdateLayout();Draw;$win.UpdateLayout();Preview 'rhythm-preview.png';$small=(Control 'SessionList').ActualHeight
+$win.Width=380;$win.Height=580;$win.UpdateLayout();Draw;$win.UpdateLayout();Preview 'rhythm-preview.png';$small=(Control 'SessionList').ActualHeight;$smallBody=$Body.ActualHeight
 $win.Width=500;$win.Height=900;$win.UpdateLayout();Draw;$win.UpdateLayout();Preview 'rhythm-expanded.png';$large=(Control 'SessionList').ActualHeight
-if($large -le $small+150){throw 'Session viewport did not expand'}
+$bodyGain=$Body.ActualHeight-$smallBody
+if($bodyGain -le 0 -or [Math]::Abs(($large-$small)-$bodyGain) -gt 2){throw ('Session viewport did not follow available height: small='+$small+' large='+$large+' bodyGain='+$bodyGain)}
 $results+=@{checks='unified responsive layout';small=$small;large=$large;passed=$true}
 $now=NowSeconds;$time=[DateTimeOffset]::UtcNow.ToOffset([TimeSpan]::FromHours(3))
 $utcExample='2026-11-02T21:30:00Z'
