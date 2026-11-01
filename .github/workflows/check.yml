@@ -15,7 +15,11 @@ jobs:
           python-version: ${{ matrix.python }}
       - run: python -m pip install -r requirements.txt
       - run: python -m unittest discover -v
-      - run: python rhythm_app.py --self-test --data-dir "$env:RUNNER_TEMP/rhythm-ui"
+      - run: |
+          python rhythm_app.py --self-test --data-dir "$env:RUNNER_TEMP/rhythm-ui"
+          $result = $LASTEXITCODE
+          if ($result -ne 0) { Get-Content "$env:RUNNER_TEMP/rhythm-ui/ui-test.log" -ErrorAction Continue }
+          exit $result
       - run: python rhythm_app.py --settings-test --data-dir "$env:RUNNER_TEMP/rhythm-settings"
       - run: powershell -NoProfile -STA -ExecutionPolicy Bypass -File connections.ps1 -ValidateOnly -DataRoot "$env:RUNNER_TEMP/rhythm-settings"
       - run: python build_release.py
