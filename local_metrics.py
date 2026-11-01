@@ -93,7 +93,7 @@ def codex_local(home=None):
         prev = {}; state = 'unknown'; last = 0; project = ''; sid = str(p);navigation={'kind':'manual'}
         sums = dict(input=0,output=0,cache=0);points=[];status=SessionState()
         for r in session_records(p):
-            try: payload=r.get('payload',{}); dt=stamp(r['timestamp'])
+            try: payload=r.get('payload',{}); dt=stamp(r['timestamp']).astimezone(MSK)
             except (ValueError,KeyError): continue
             status.consume(r,dt)
             if r.get('type')=='session_meta':
@@ -113,7 +113,7 @@ def codex_local(home=None):
                 out=max(0,usage.get('output_tokens',0)-prev.get('output_tokens',0))
                 cache=max(0,usage.get('cached_input_tokens',0)-prev.get('cached_input_tokens',0))
                 if inp+out:points.append((dt.timestamp(),inp+out,max(0,inp-cache)+out))
-            if dt.date()==day:
+            if dt.date()==day and dt.timestamp()<=now.timestamp():
                 observed=True
                 for dst,src in [('input','input_tokens'),('output','output_tokens'),('cache','cached_input_tokens')]:
                     delta=max(0,usage.get(src,0)-prev.get(src,0)) if not prev.get('_fork') else 0

@@ -287,5 +287,25 @@ if($record.target.id -ne $id -or $record.target.navigation.kind -ne 'codex_deskt
 if($xml.toast.activationType -ne 'protocol' -or $xml.toast.launch -ne ('aiti-rhythm://notification/'+$ref)){throw 'Toast needs immutable protocol activation'}
 if($xml.toast.visual.binding.text[1] -notmatch 'Тест & <сессия>'){throw 'Toast text escaping lost title'}
 $results+=@{checks='application routes; unknown choice; immutable per-toast target and escaped native activation';passed=$true}
+$historyDays=@();$historyToday=[DateTimeOffset]::FromUnixTimeSeconds([long](NowSeconds)).ToOffset([TimeSpan]::FromHours(3)).Date
+for($i=0;$i -lt 75;$i++){$historyDays+=[pscustomobject]@{date=$historyToday.AddDays(-$i).ToString('yyyy-MM-dd');total=(10000+$i*1000);partial=$false;at=(NowSeconds)}}
+$data.usage|Add-Member -NotePropertyName history -NotePropertyValue ([pscustomobject]@{
+ codex=[pscustomobject]@{today=$historyToday.ToString('yyyy-MM-dd');days=$historyDays};claude=[pscustomobject]@{today=$historyToday.ToString('yyyy-MM-dd');days=@()}
+}) -Force
+Draw;Click (Control 'HistoryOpenCodex');$historyWindow.UpdateLayout();DrawHistory
+if($historyTitle.Text -ne 'Codex' -or (HistoryRows).Count -ne 7 -or $historyTotal.Text -ne (TokenAmount 91000)){throw 'Week history click or total failed'}
+Click $historyPeriodButtons[1]
+if((HistoryRows).Count -ne 30 -or $historyTotal.Text -ne (TokenAmount 735000)){throw 'Month history total failed'}
+$historyWindow.UpdateLayout();DrawHistory;$historyWindow.UpdateLayout()
+$bmp=[Windows.Media.Imaging.RenderTargetBitmap]::new([int]$historyWindow.ActualWidth,[int]$historyWindow.ActualHeight,96,96,[Windows.Media.PixelFormats]::Pbgra32);$bmp.Render($historyWindow)
+$encoder=[Windows.Media.Imaging.PngBitmapEncoder]::new();$encoder.Frames.Add([Windows.Media.Imaging.BitmapFrame]::Create($bmp));$file=[IO.File]::Create((Join-Path $root 'rhythm-history-month.png'));$encoder.Save($file);$file.Dispose()
+Click $historyPeriodButtons[2]
+if((HistoryRows).Count -ne 75 -or $historyTotal.Text -ne (TokenAmount 3525000)){throw 'All history total failed'}
+$historyWindow.Width=680;$historyWindow.UpdateLayout();DrawHistory
+if($historyChart.Width -le $historyScroll.ActualWidth){throw 'Long daily history must remain scrollable'}
+ShowUsageHistory 'claude'
+if($historyTotal.Text -ne '—' -or $historyTitle.Text -ne 'Claude'){throw 'Missing history must not be a zero'}
+$historyWindow.Close()
+$results+=@{checks='history click;7/30/all sums;daily scroll;provider switch;empty;680px';passed=$true}
 $results|ConvertTo-Json|Set-Content -LiteralPath (Join-Path $root 'widget-test.json') -Encoding UTF8
 $script:closing=$true;$win.Close()

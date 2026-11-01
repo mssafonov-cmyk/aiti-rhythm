@@ -7,6 +7,26 @@ import sys
 import time
 
 
+def read_token_history(root):
+    """Use the existing configured SSH host, but only read retained token metadata.
+
+    Replaces the remote script, so no quota/API call or remote installation occurs.
+    """
+    source = Path(root).resolve() / 'collect.py'
+    spec = importlib.util.spec_from_file_location('rhythm_history_legacy', source)
+    module = importlib.util.module_from_spec(spec)
+    sys.path.insert(0, str(source.parent))
+    try:
+        spec.loader.exec_module(module)
+        original_ssh = module.ssh
+        reader = (Path(__file__).resolve().parent / 'history_readers.py').read_text(encoding='utf-8')
+        remote = reader + "\nprint(json.dumps(read_history(Path.home()/'.claude', 'claude')))\n"
+        module.ssh = lambda host, _source, *args, **kwargs: original_ssh(host, remote, *args, **kwargs)
+        return module.claude_remote()
+    finally:
+        sys.path.remove(str(source.parent))
+
+
 def read(root, provider, data_root):
     # No default root, host, account, SSH key or user ref is part of this adapter.
     source = Path(root).resolve() / 'collect.py'

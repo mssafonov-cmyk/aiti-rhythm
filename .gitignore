@@ -9,6 +9,7 @@ snapshot.json
 widget-*.json
 metric-options.json
 daily-token-totals.json
+usage-history.json
 claude-quota-memory.json
 agy-quota-*.json
 agy-statusline-*.sealed

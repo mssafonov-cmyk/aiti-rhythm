@@ -4,6 +4,7 @@ $script:signalKey=''
 $script:showDetails=$false
 $script:cardSignals=@{}
 $script:agyQuotaGroup='gemini'
+. (Join-Path $assetRoot 'usage-history.ps1')
 $script:quotaBarTemplate=[Windows.Markup.XamlReader]::Parse(@'
 <ControlTemplate xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" TargetType="ProgressBar">
  <Grid SnapsToDevicePixels="True" ClipToBounds="True">
@@ -97,7 +98,8 @@ function DrawQuota($c,$narrow){
    $tip+="`nПолучено от agy: "+[DateTimeOffset]::FromUnixTimeSeconds([long]$data.antigravity.quota_at).ToLocalTime().ToString('dd.MM HH:mm')+$(if($stale){"`n* Сохранённый остаток; откройте agy для обновления."}else{''})
    $name=FlatButton ($(if($group -eq 'gemini'){'Gemini'}else{'Другие'})+' ▾') $cell {param($sender,$e) ShowAgyGroups $sender};$caption=Label ($(if($group -eq 'gemini'){'Gemini'}else{'Другие'})+' ▾') 11 '#939DA7';$caption.Width=$cell;$name.Content=$caption;$name.Name='AgyQuotaGroup';$name.Height=18;$name.FontSize=10;$name.HorizontalContentAlignment='Left';$name.Padding='0';$name.ToolTip=$tip;Put $c $name $x 22
   }else{
-   $left=WeeklyRemaining $provider;$short=FiveHourRemaining $provider;$reset=QuotaReset $provider 'weekly';$tip=if($null -eq $left){'Недельная квота недоступна в выбранном источнике.'}else{'Остаток недельной квоты '+$provider};Put $c (Label $provider 11 '#939DA7') $x 24
+   $left=WeeklyRemaining $provider;$short=FiveHourRemaining $provider;$reset=QuotaReset $provider 'weekly';$tip=if($null -eq $left){'Недельная квота недоступна в выбранном источнике.'}else{'Остаток недельной квоты '+$provider}
+   $name=FlatButton $provider $(if($stacked){$cell}else{48}) {param($s,$e) ShowUsageHistory $s.Tag};$name.Tag=$provider.ToLowerInvariant();$name.Name='QuotaHistory'+$provider;$name.Height=19;$name.Padding='0';$name.FontSize=11;$name.HorizontalContentAlignment='Left';$name.ToolTip='Открыть историю токенов '+$provider;Put $c $name $x 22
    if($provider -eq 'Claude'){$stale=ClaudeQuotaStale;$tip=ClaudeQuotaTip}
   }
   $value=Label $(if($null -eq $left){'—'}else{('{0:0.#}%' -f $left)+$(if($stale){'*'}else{''})}) $(if($cell -lt 80){20}else{22}) $(if($stale){'#ADB8C3'}elseif($null -ne $left -and $left -le 15){'#E6B66B'}else{'#E5E8EB'})
@@ -137,11 +139,16 @@ function DrawUsage($c,$y,$compact,$narrow){
   $tip=$p.name+' · токены за сегодня: '+$(if($null -eq $p.day_tokens){'нет данных'}else{('{0:N0}' -f $p.day_tokens)})+"`n"+$(if($null -eq $p.per_min){'Скорость неизвестна'}else{(TokenAmount $p.per_min)+' ток/мин'})+"`n"+$p.note+$(if(-not @($p.series|Where-Object {$null -ne $_}).Count){"`nИстория графика недоступна"}else{''})
   if($p.cached_day){$tip+="`n* Последний сохранённый итог; источник пока не обновился."}
   if($p.day_updated_at){$tip+="`nОбновлено "+[DateTimeOffset]::FromUnixTimeSeconds([long]$p.day_updated_at).ToLocalTime().ToString('dd.MM.yyyy HH:mm')}
+  if($p.name -in @('Codex','Claude')){
+   $click=FlatButton '' ($cw-3) {param($s,$e) ShowUsageHistory $s.Tag};$click.Name='HistoryOpen'+$p.name;$click.Tag=$p.name.ToLowerInvariant();$click.Height=33;$click.ToolTip='История токенов '+$p.name+' · неделя, месяц, всё время'
+   [Windows.Automation.AutomationProperties]::SetName($click,'История токенов '+$p.name);Put $c $click $x ($y+16)
+  }
   $dot=[Windows.Shapes.Rectangle]::new();$dot.Width=3;$dot.Height=3;$dot.Fill=Brush $p.color;Put $c $dot $x ($y+21)
   $legend=Label $p.name 9 '#C4CED8';$legend.Name='Legend'+$p.name;$legend.Width=$cw-8;$legend.ToolTip=$tip;Put $c $legend ($x+7) ($y+16)
   $text=if($null -eq $p.day_tokens){'—'}else{$(if($p.partial){'от '}else{''})+(TokenAmount $p.day_tokens)}
   if($p.cached_day){$text+='*'}
   $value=Label $text $(if($text.Length -gt 9){11}else{13}) $(if($p.cached_day){'#ADB8C3'}else{'#E5E8EB'});$value.Name='Daily'+$p.name;$value.FontFamily='Bahnschrift';$value.Width=$cw-4;$value.ToolTip=$tip;Put $c $value $x ($y+29)
+  if($p.name -in @('Codex','Claude')){foreach($element in @($dot,$legend,$value)){$element.IsHitTestVisible=$false};$click.ToolTip=$tip+"`nНажмите: история за неделю, месяц, всё время"}
  }
  $speed=if($valid){$(if($usage.partial){'от '}else{''})+(TokenAmount $burn.per_min)+' ток/мин'}else{'нет данных'}
  $rate=Label ('Среднее за '+$minutes+' мин: '+$speed) 10 $(if($hot){'#E6B66B'}else{'#AAB7C4'});$rate.Name='TokenRate';$rate.Width=$w

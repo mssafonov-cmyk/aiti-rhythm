@@ -19,6 +19,8 @@ from antigravity_metrics import antigravity_local, profile
 from usage_metrics import combined_usage, DailyUsageMemory
 from claude_usage import ClaudeQuotaMemory
 from burn import metric_window, day_start_msk
+from usage_history import UsageHistory
+from history_readers import read_history
 
 
 class Collector:
@@ -29,6 +31,54 @@ class Collector:
         self.cube = Cube()
         self.daily_memory = DailyUsageMemory(root)
         self.claude_quota_memory = ClaudeQuotaMemory(root)
+        self.history = UsageHistory(root)
+        self.history_jobs, self.history_imports, self.history_next, self.history_ids = {}, {}, {}, {}
+
+    def history_identity(self, name, settings):
+        section = settings[name]
+        source = section.get('source', 'local') if name == 'claude' else 'local'
+        if source == 'external':
+            location = load_secrets(self.root).get('claude_command', [])
+        else:
+            location = os.path.normcase(os.path.abspath(provider_home(section['home'],
+                'CODEX_HOME' if name == 'codex' else 'CLAUDE_CONFIG_DIR', '.'+name)))
+        return hashlib.sha256(json.dumps([name, source, location], sort_keys=True).encode()).hexdigest()
+
+    def history_work(self, name, settings):
+        if name == 'claude' and settings[name].get('source') == 'external':
+            command = load_secrets(self.root).get('claude_command', [])
+            if '--legacy-root' in command and '--legacy-provider' in command:
+                from legacy_bridge import read_token_history
+                return read_token_history(command[command.index('--legacy-root')+1])
+            # Other external readers may explicitly provide daily history in their contract.
+            return dict(days=[], checked_at=time.time(), available=False)
+        return read_history(provider_home(settings[name]['home'],
+            'CODEX_HOME' if name == 'codex' else 'CLAUDE_CONFIG_DIR', '.'+name), name)
+
+    def history_step(self, snapshot, settings, now):
+        identities = {}
+        for name in ('codex', 'claude'):
+            identity = self.history_identity(name, settings)
+            identities[name] = identity
+            if identity != self.history_ids.get(name):
+                self.history_ids[name] = identity
+                self.history_imports.pop(name, None)
+                self.history_next[name] = 0
+            job = self.history_jobs.get(name)
+            if job and job[1].done():
+                old_identity, future = self.history_jobs.pop(name)
+                if old_identity == identity and settings[name]['enabled']:
+                    try:
+                        self.history_imports[name] = future.result()
+                    except Exception as error:
+                        self.history_imports[name] = dict(error=type(error).__name__)
+                    self.history_next[name] = now + 300
+            if settings[name]['enabled'] and name not in self.history_jobs and now >= self.history_next.get(name, 0):
+                self.history_jobs[name] = identity, self.pool.submit(self.history_work, name, copy.deepcopy(settings))
+            supplied = snapshot.get(name, {}).get('history')
+            if isinstance(supplied, dict) and isinstance(supplied.get('days'), list):
+                self.history_imports[name] = supplied
+        return self.history.enrich(snapshot, identities, self.history_imports, now)
 
     def usage_identity(self, name, settings):
         if name == 'antigravity':
@@ -105,6 +155,7 @@ class Collector:
         snapshot = self.daily_memory.enrich(snapshot, {name:self.usage_identity(name, settings)
             for name in ('codex', 'claude', 'antigravity')}, now)
         snapshot['usage'] = combined_usage(snapshot, now)
+        snapshot['usage']['history'] = self.history_step(snapshot, settings, now)
         cube_key = self.key('cube', settings)
         cube_pending = self.pending.get('cube')
         if cube_pending and cube_pending[1].done():
@@ -142,7 +193,7 @@ def main():
     try:
         if args.once:
             collector.step()
-            for _, future in list(collector.pending.values()):
+            for _, future in list(collector.pending.values()) + list(collector.history_jobs.values()):
                 try:
                     future.result(timeout=25)
                 except Exception:

@@ -15,7 +15,7 @@ so you can spot a waiting agent without checking every chat and terminal.
 ## What it shows
 
 - **Agent activity:** sessions that are working or waiting for a reply, with links back to supported clients.
-- **Token usage:** daily totals, recent consumption rate and an alert identifying the busiest session.
+- **Token usage:** click Codex or Claude for daily bars and totals over the last 7 days, 30 days or all retained history. Also shows recent consumption rate and an alert identifying the busiest session.
 - **Subscription limits:** weekly and five-hour quota windows and reset times, when available from the source.
 - **Meetings:** the next calendar event and a join button, if you connect a calendar.
 
