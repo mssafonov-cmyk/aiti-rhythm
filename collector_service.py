@@ -10,7 +10,7 @@ import threading
 import time
 from calendars import collect_calendar
 from claude_metrics import claude_local
-from codex_account import read_limits
+from codex_account import read_limits, account_fingerprint
 from cube import Cube
 from local_metrics import codex_local
 from runtime import HERE, load_settings, load_secrets, provider_home
@@ -105,7 +105,10 @@ class Collector:
         path = self.root / 'connections.sealed'
         secret_time = path.stat().st_mtime_ns if path.exists() and name in ('calendar', 'claude') else 0
         section = settings['codex'] if name == 'limits' else settings[name]
-        return hashlib.sha256(json.dumps([section, secret_time], sort_keys=True).encode()).hexdigest()
+        identity = [section, secret_time]
+        if name in ('codex','limits'):
+            identity.append(account_fingerprint(provider_home(settings['codex']['home'], 'CODEX_HOME', '.codex')))
+        return hashlib.sha256(json.dumps(identity, sort_keys=True).encode()).hexdigest()
 
     def work(self, name, settings):
         if name == 'antigravity':

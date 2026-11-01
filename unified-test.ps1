@@ -144,12 +144,12 @@ if((Control 'CodexFiveHour').Value -ne 60){throw 'Codex short and weekly windows
 $compactHeight=$win.Height;$data.codex.burn.alert=$true
 Draw;$win.UpdateLayout();Draw;$win.UpdateLayout()
 if($win.Height -ne $compactHeight -or (Control 'TokenLeader')){throw 'A compact usage alert must not expand the window automatically'}
-if((Control 'TokenRate').ToolTip -notmatch 'Сессия Codex:'){throw 'Compact alerts must retain the leading session in the tooltip'}
+if((Control 'DetailsToggle').ToolTip -notmatch 'Сессия Codex:'){throw 'Collapsed graph toggle must retain the leading session in its tooltip'}
 Click (Control 'DetailsToggle');$win.UpdateLayout();Draw;$win.UpdateLayout()
 if(-not (Control 'TokenLeader') -or $win.Height -le $compactHeight){throw 'Usage details must expand on explicit request'}
 Click (Control 'DetailsToggle');$data.codex.burn.alert=$false
 Draw;$win.UpdateLayout();Draw;$win.UpdateLayout()
-if((Control 'ClaudeReset').Text -ne 'Дата не передана'){throw 'Missing weekly reset must not be inferred from utilization'}
+if((Control 'ClaudeReset').Text -notin @('Нет даты','Дата не передана')){throw 'Missing weekly reset must not be inferred from utilization'}
 $data.claude.limits.seven_day|Add-Member -NotePropertyName resets_at -NotePropertyValue $time.AddDays(3).ToString('o') -Force
 Draw;$win.UpdateLayout()
 if((Control 'ClaudeReset').Text -notmatch '^До '){throw 'Reported weekly reset was discarded'}
@@ -158,7 +158,7 @@ $knownHeight=$win.Height;$savedFive=$data.claude.limits.five_hour;$savedSession=
 $data.claude.limits.five_hour=$null;$data.limits.session_pct=$null
 Draw;$win.UpdateLayout();Draw;$win.UpdateLayout()
 if((Control 'ClaudeFiveHour') -or (Control 'CodexFiveHour')){throw 'Absent five-hour windows must not render tracks'}
-if($win.Height -ne $knownHeight-8){throw 'Absent five-hour windows must reclaim their row height'}
+if($win.Height -ne $knownHeight -or (Control 'ClaudeShortStatus').Text -ne '5 ч: нет данных'){throw 'Fixed account cards must explain an unavailable short window without shifting totals'}
 Preview 'rhythm-quota-no-five-hour.png'
 $data.claude.limits.five_hour=$savedFive
 Draw;$win.UpdateLayout()
@@ -173,7 +173,7 @@ foreach($width in @(260,380)){
  for($mask=0;$mask -lt 16;$mask++){
   $data.view.calendar=[bool]($mask-band 1);$data.view.sessions=[bool]($mask-band 2);$data.view.limits=[bool]($mask-band 4);$data.view.usage=[bool]($mask-band 8)
   Draw;$win.UpdateLayout();Draw;$win.UpdateLayout()
-  foreach($item in @(@('MeetingCard',$data.view.calendar),@('SessionsCard',$data.view.sessions),@('ResourcesCard',($data.view.limits-or $data.view.usage)),@('TokenRate',$data.view.usage),@('ClaudeRemaining',$data.view.limits))){
+  foreach($item in @(@('MeetingCard',$data.view.calendar),@('SessionsCard',$data.view.sessions),@('ResourcesCard',($data.view.limits-or $data.view.usage)),@('TokenRate',($data.view.usage -and (DetailsExpanded $data.view.compact_usage))),@('ClaudeRemaining',$data.view.limits))){
    if([bool](Control $item[0]) -ne $item[1]){throw ('Wrong block visibility '+$item[0]+' mask '+$mask)}
   }
   $bottom=0
@@ -200,10 +200,7 @@ $data|Add-Member -NotePropertyName antigravity -NotePropertyValue ([pscustomobje
 foreach($width in @(260,380)){
  $win.Width=$width;$script:showDetails=$false;Draw;$win.UpdateLayout()
  foreach($name in @('Codex','Claude','Antigravity')){if((Control ('Legend'+$name)).Text -ne $name -or -not (Control ('Daily'+$name))){throw 'Provider needs its full name and separate daily amount'};if(Control ('Graph'+$name)){throw 'Compact view must not mix a miniature graph with daily totals'}}
- if((Control 'DailyUsageHeading').Text -ne 'ТОКЕНЫ ЗА СЕГОДНЯ' -or (Control 'TokenRate').Text -notmatch '^Среднее за 15 мин:'){throw 'Usage units and time periods must be explicit'}
- $rateControl=Control 'TokenRate';$measure=Label $rateControl.Text $rateControl.FontSize;$measure.Measure([Windows.Size]::new([double]::PositiveInfinity,[double]::PositiveInfinity))
- if($measure.DesiredSize.Width -gt $rateControl.ActualWidth){throw 'Rate period or units would be clipped'}
- if($rateControl.Text -notmatch 'от '){throw 'Partial rate needs a readable lower-bound qualifier'}
+ if((Control 'DailyUsageHeadingCodex').Text -ne 'ДЕНЬ · ПРОФИЛЬ' -or (Control 'TokenRate')){throw 'Daily usage must live in the account tile with its scope; hidden detail must not duplicate it below'}
  Preview ('rhythm-three-providers-'+$width+'.png')
  $cachedProvider=@($data.usage.providers|Where-Object name -eq 'Claude')[0]
  $cachedProvider|Add-Member -NotePropertyName cached_day -NotePropertyValue $true -Force
@@ -214,6 +211,8 @@ foreach($width in @(260,380)){
  $cachedProvider.cached_day=$false;Draw;$win.UpdateLayout()
  if((Control 'DailyClaude').Text -match '\*$'){throw 'Fresh data must clear the cached marker'}
  Click (Control 'DetailsToggle');$win.UpdateLayout();Draw;$win.UpdateLayout()
+ $rateControl=Control 'TokenRate';$measure=Label $rateControl.Text $rateControl.FontSize;$measure.Measure([Windows.Size]::new([double]::PositiveInfinity,[double]::PositiveInfinity))
+ if($measure.DesiredSize.Width -gt $rateControl.ActualWidth -or $rateControl.Text -notmatch 'от '){throw 'Expanded rate needs readable units, period and lower-bound marker'}
  foreach($name in @('Codex','Claude','Antigravity')){if(-not (Control ('Graph'+$name))){throw 'Provider history must be available in details'}}
  Preview ('rhythm-provider-details-'+$width+'.png');Click (Control 'DetailsToggle')
 }
@@ -243,7 +242,7 @@ $data.antigravity.quota_at=$now-601;Draw;$win.UpdateLayout()
 if((Control 'AntigravityRemaining').Text -notmatch '\*$' -or (Control 'AgyQuotaGroup').ToolTip -notmatch 'Сохранённый'){throw 'Cached quota must explain freshness'}
 $data.antigravity.quota.'gemini-weekly'.reset_at=$now-1;$data.antigravity.quota.'3p-weekly'.reset_at=$now-1
 Draw;$win.UpdateLayout();Draw;$win.UpdateLayout()
-if(Control 'AntigravityRemaining'){throw 'Expired quotas must not become100% or remain visible'}
+if((Control 'AntigravityRemaining').Text -ne '—'){throw 'Expired quotas must become unknown while the Antigravity history tile remains available'}
 $results+=@{checks='Antigravity real quota groups; menu; zero/missing/expired/stale; compact260/380; period/reset metadata';passed=$true}
 
 # Historical Claude quota stays visible through429/offline/reset with its original time.
@@ -320,7 +319,18 @@ $historyWindow.Width=680;$historyWindow.UpdateLayout();DrawHistory
 if($historyChart.Width -le $historyScroll.ActualWidth){throw 'Long daily history must remain scrollable'}
 ShowUsageHistory 'claude'
 if($historyTotal.Text -ne '—' -or $historyTitle.Text -ne 'Claude'){throw 'Missing history must not be a zero'}
+$data.usage.history.claude.days=@([pscustomobject]@{date=$historyToday.ToString('yyyy-MM-dd');total=300;partial=$false;at=(NowSeconds)})
+$data.usage.history|Add-Member -NotePropertyName antigravity -NotePropertyValue ([pscustomobject]@{today=$historyToday.ToString('yyyy-MM-dd');days=@([pscustomobject]@{date=$historyToday.ToString('yyyy-MM-dd');total=50;partial=$false;at=(NowSeconds)})}) -Force
+$script:historyPeriod='week';Click $historyProviderButtons[3]
+if($historyTitle.Text -ne 'Всего' -or ((HistoryRows)|Measure-Object total -Sum).Sum -ne 91350 -or $historyTotal.Text -notmatch '^от '){throw 'Combined history must sum known providers and retain missing coverage'}
+if($historyCompare.codex.bar.Value -ne 100 -or $historyCompare.claude.total.Text -ne 'от 300'){throw 'Subscription comparison must share a scale and keep missing days explicit'}
+if($historyProviderButtons.Count -ne 4 -or $historyMethod.Text -notmatch 'все аккаунты'){throw 'Provider chips or Codex account scope missing'}
+$historyWindow.UpdateLayout();DrawHistory;$historyWindow.UpdateLayout()
+$bmp=[Windows.Media.Imaging.RenderTargetBitmap]::new([int]$historyWindow.ActualWidth,[int]$historyWindow.ActualHeight,96,96,[Windows.Media.PixelFormats]::Pbgra32);$bmp.Render($historyWindow)
+$encoder=[Windows.Media.Imaging.PngBitmapEncoder]::new();$encoder.Frames.Add([Windows.Media.Imaging.BitmapFrame]::Create($bmp));$file=[IO.File]::Create((Join-Path $root 'rhythm-history-comparison.png'));$encoder.Save($file);$file.Dispose()
+Click $historyProviderButtons[2]
+if($historyTitle.Text -ne 'Antigravity' -or $historyTotal.Text -ne 'от 50'){throw 'Provider chips must retain the period and show that provider only'}
 $historyWindow.Close()
-$results+=@{checks='history click;7/30/all sums;daily scroll;provider switch;empty;680px';passed=$true}
+$results+=@{checks='history tile hit tests;7/30/all sums;four provider chips;combined partial total;comparison scale;daily scroll;empty;680px';passed=$true}
 $results|ConvertTo-Json|Set-Content -LiteralPath (Join-Path $root 'widget-test.json') -Encoding UTF8
 $script:closing=$true;$win.Close()

@@ -68,7 +68,7 @@ Add-Type -AssemblyName PresentationFramework,PresentationCore,WindowsBase
      </StackPanel></Border>
      <Border Style="{StaticResource Card}"><StackPanel>
       <TextBlock Text="КОМПАКТНОСТЬ" Foreground="#94A7BF" FontSize="11" FontWeight="SemiBold"/>
-      <CheckBox x:Name="ViewCompactUsage" Content="Показывать расход компактной строкой" Margin="0,16,0,16"/>
+      <CheckBox x:Name="ViewCompactUsage" Content="Скрывать график скорости и затратную сессию" Margin="0,16,0,16"/>
       <CheckBox x:Name="ViewAutoHeight" Content="Подбирать высоту под видимые блоки"/>
       <TextBlock Text="Можно скрыть всё: останется заголовок с настройками. Ширина уменьшается до 260." Style="{StaticResource Hint}" FontSize="11" Margin="0,14,0,0"/>
      </StackPanel></Border>

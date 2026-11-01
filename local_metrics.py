@@ -5,6 +5,7 @@ from datetime import datetime, timedelta, timezone
 from burn import velocity, day_series
 MSK=timezone(timedelta(hours=3))
 from app_paths import DATA as HERE
+from codex_account import account_fingerprint, owner_fingerprint
 
 def stamp(value):
     dt=datetime.fromisoformat(value.replace('Z','+00:00'))
@@ -84,13 +85,14 @@ def codex_local(home=None):
     totals = dict(input=0, output=0, cache=0)
     sessions = []; seen_sessions = set(); observed = False; consumers=[];all_points=[]
     source_home=Path(home) if home is not None else Path.home()/'.codex'
+    current_account=account_fingerprint(source_home); excluded_sessions=0
     index=source_home/'session_index.jsonl'
     titles={r.get('id'):r.get('thread_name','') for r in records(index)} if index.exists() else {}
     from session_navigation import codex_navigation
     destinations = {}
     for p in (source_home/'sessions').rglob('*.jsonl'):
         if p.stat().st_mtime < now.timestamp()-7*86400: continue
-        prev = {}; state = 'unknown'; last = 0; project = ''; sid = str(p);navigation={'kind':'manual'}
+        prev = {}; state = 'unknown'; last = 0; project = ''; sid = str(p);navigation={'kind':'manual'};owner=None
         sums = dict(input=0,output=0,cache=0);points=[];status=SessionState()
         for r in session_records(p):
             try: payload=r.get('payload',{}); dt=stamp(r['timestamp']).astimezone(MSK)
@@ -99,6 +101,7 @@ def codex_local(home=None):
             if r.get('type')=='session_meta':
                 sid=payload.get('id',sid); project=Path(payload.get('cwd','')).name
                 navigation=codex_navigation(payload)
+                owner=owner_fingerprint(payload.get('creator_account_id'))
                 # Fork histories can contain parent totals: never charge their initial snapshot.
                 if payload.get('forked_from_id'): prev={'_fork':True}
             if r.get('type')!='event_msg': continue
@@ -132,6 +135,9 @@ def codex_local(home=None):
         for k in totals: totals[k]+=sums[k]
         state=status.status;last=status.at
         if last>=now.replace(hour=0,minute=0,second=0,microsecond=0).timestamp() or state in ('working','waiting'):
+            if current_account and owner != current_account:
+                excluded_sessions+=1
+                continue
             # Never infer waiting from silence. Old unfinished turns are explicitly unknown.
             if state=='working' and time.time()-p.stat().st_mtime>1800: state='unknown'
             sessions.append(dict(provider='Codex',project=project,status=state,at=last,
@@ -144,5 +150,9 @@ def codex_local(home=None):
     overall['series']=day_series(all_points,now.timestamp())
     overall['leader_basis']='window' if overall['per_min'] else 'day'
     if overall['per_min']==0:consumers.sort(key=lambda v:v['day_tokens'],reverse=True)
+    # Journal ownership is not proof of which subscription paid for each turn.
+    # Tokens/history deliberately remain profile-wide and are labelled as such in UI.
     return dict(tokens=totals,observed=observed,sessions=sessions,checked_at=time.time(),
+                session_scope='account' if current_account else 'profile', excluded_sessions=excluded_sessions,
+                account_fingerprint=current_account, token_scope='profile',
                 burn=dict(**overall,leaders=consumers[:10]))

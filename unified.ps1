@@ -82,29 +82,33 @@ function QuotaReset($provider,$window){
 function HasFiveHour{
  foreach($provider in @('Codex','Claude')){if($null -ne (FiveHourRemaining $provider)){return $true}};return $false
 }
-function QuotaHeight($narrow){return 110+$(if($narrow -or (AgyGroup)){24}else{0})+$(if((HasFiveHour) -or (AgyBucket '5h' (AgyGroup))){8}else{0})}
+function QuotaHeight($narrow){if(-not (ViewOption 'limits')){return 91};return $(if(ViewOption 'usage'){190}else{150})}
 function DrawQuota($c,$narrow){
- $w=$c.Width;CardHeading $c 'ОСТАТОК НЕДЕЛИ' ''
- $group=AgyGroup;$providers=@('Codex','Claude');if($group){$providers+=@('Antigravity')}
- $stacked=$narrow -or [bool]$group;$shift=if($stacked){24}else{0};$gap=if($group){12}elseif($narrow){16}else{24};$cell=($w-$gap*($providers.Count-1))/$providers.Count
- $hasShort=(HasFiveHour) -or ($group -and $null -ne (AgyBucket '5h' $group));$footer=58+$shift+$(if($hasShort){8}else{0})
+ $w=$c.Width;$outer=$c;CardHeading $c $(if(ViewOption 'limits'){'ОСТАТОК НЕДЕЛИ'}else{'ТОКЕНЫ ЗА СЕГОДНЯ'}) ''
+ if(ViewOption 'usage'){$more=FlatButton $(if(DetailsExpanded (ViewOption 'compact_usage')){'⌃'}else{'⌄'}) 25 {$script:showDetails=-not $showDetails;Draw};$more.Name='DetailsToggle';$more.Height=19;$more.ToolTip='График скорости и самая затратная сессия';if((UsageData).burn.alert){$more.ToolTip+="`n"+(BurnNoticeText (UsageData).burn);$more.Foreground=Brush '#E6B66B'};Put $c $more ($w-25) -3}
+ $group=AgyGroup;$providers=@('Codex','Claude','Antigravity');$stacked=$true;$shift=7;$gap=6;$slot=($w-$gap*2)/3;$cell=$slot-12;$footer=73
  for($i=0;$i -lt $providers.Count;$i++){
-  $provider=$providers[$i];$agy=$provider -eq 'Antigravity';$x=$i*($cell+$gap);$stale=$false
+  $provider=$providers[$i];$agy=$provider -eq 'Antigravity';$x=0;$stale=$false
+  $tile=FlatButton '' $slot {param($s,$e) ShowUsageHistory $s.Tag};$tile.Name='HistoryOpen'+$provider;$tile.Tag=$provider.ToLowerInvariant();$tile.Padding='6,0';$tile.Height=(QuotaHeight $narrow)-20;$tile.Background=Brush '#252F3B'
+  $c=[Windows.Controls.Canvas]::new();$c.Width=$cell;$c.Height=$tile.Height;$tile.Content=$c
+  $tile.ToolTip='История '+$provider+' · неделя, месяц, всё время';[Windows.Automation.AutomationProperties]::SetName($tile,'История токенов '+$provider);Put $outer $tile ($i*($slot+$gap)) 20
   if($agy){
-   $bucket=AgyBucket 'weekly' $group;$left=100*$bucket.remaining_fraction;$shortBucket=AgyBucket '5h' $group;$short=if($shortBucket){100*$shortBucket.remaining_fraction}else{$null};$stale=(NowSeconds)-$data.antigravity.quota_at -ge 600
+   $bucket=AgyBucket 'weekly' $group;$left=if($bucket){100*$bucket.remaining_fraction}else{$null};$shortBucket=AgyBucket '5h' $group;$short=if($shortBucket){100*$shortBucket.remaining_fraction}else{$null};$stale=$bucket -and (NowSeconds)-$data.antigravity.quota_at -ge 600
    $reset=if($bucket.reset_at){[DateTimeOffset]::FromUnixTimeSeconds([long]$bucket.reset_at).ToLocalTime()}else{$null}
    $tip='Antigravity · '+$(if($group -eq 'gemini'){'Gemini'}else{'Другие модели'})+(' · неделя {0:0.#}%' -f $left)
    foreach($period in @(@('weekly','неделя'),@('5h','5 часов'))){$b=AgyBucket $period[0] $group;if($b){$tip+="`n"+$period[1]+(' · {0:0.#}%' -f (100*$b.remaining_fraction));if($b.reset_at){$tip+=' · сброс '+[DateTimeOffset]::FromUnixTimeSeconds([long]$b.reset_at).ToLocalTime().ToString('dd.MM HH:mm')}}}
    $tip+="`nПолучено от agy: "+[DateTimeOffset]::FromUnixTimeSeconds([long]$data.antigravity.quota_at).ToLocalTime().ToString('dd.MM HH:mm')+$(if($stale){"`n* Сохранённый остаток; откройте agy для обновления."}else{''})
-   $name=FlatButton ($(if($group -eq 'gemini'){'Gemini'}else{'Другие'})+' ▾') $cell {param($sender,$e) ShowAgyGroups $sender};$caption=Label ($(if($group -eq 'gemini'){'Gemini'}else{'Другие'})+' ▾') 11 '#939DA7';$caption.Width=$cell;$name.Content=$caption;$name.Name='AgyQuotaGroup';$name.Height=18;$name.FontSize=10;$name.HorizontalContentAlignment='Left';$name.Padding='0';$name.ToolTip=$tip;Put $c $name $x 22
+   if(-not $bucket){$tip='Квота Antigravity пока не получена. История токенов доступна независимо от квоты.'}
+   $name=FlatButton '' $cell {param($sender,$e) ShowAgyGroups $sender};$caption=Label $(if($group){$(if($group -eq 'gemini'){'Gemini'}else{'Другие'})+' ▾'}else{'Antigravity'}) 10 '#B6C6D4';$caption.Name='LegendAntigravity';$caption.Width=$cell;$name.Content=$caption;$name.Name='AgyQuotaGroup';$name.Height=18;$name.HorizontalContentAlignment='Left';$name.Padding='0';$name.ToolTip=$tip;$name.IsHitTestVisible=[bool]$group;Put $c $name 0 5
   }else{
    $left=WeeklyRemaining $provider;$short=FiveHourRemaining $provider;$reset=QuotaReset $provider 'weekly';$tip=if($null -eq $left){'Недельная квота недоступна в выбранном источнике.'}else{'Остаток недельной квоты '+$provider}
-   $name=FlatButton $provider $(if($stacked){$cell}else{48}) {param($s,$e) ShowUsageHistory $s.Tag};$name.Tag=$provider.ToLowerInvariant();$name.Name='QuotaHistory'+$provider;$name.Height=19;$name.Padding='0';$name.FontSize=11;$name.HorizontalContentAlignment='Left';$name.ToolTip='Открыть историю токенов '+$provider;Put $c $name $x 22
+   $name=Label $provider 10 '#B6C6D4';$name.Name='Legend'+$provider;$name.Width=$cell;Put $c $name 0 5
+   if($provider -eq 'Codex' -and $data.limits.account_label -eq 'Рабочий'){$name.Text='Codex · раб.';$name.ToolTip='Квота рабочего аккаунта Codex'}
    if($provider -eq 'Claude'){$stale=ClaudeQuotaStale;$tip=ClaudeQuotaTip}
   }
   $value=Label $(if($null -eq $left){'—'}else{('{0:0.#}%' -f $left)+$(if($stale){'*'}else{''})}) $(if($cell -lt 80){20}else{22}) $(if($stale){'#ADB8C3'}elseif($null -ne $left -and $left -le 15){'#E6B66B'}else{'#E5E8EB'})
   $value.Name=$provider+'Remaining';$value.FontFamily='Bahnschrift';$value.Width=if($stacked){$cell}else{$cell-43};$value.TextAlignment=if($stacked){'Left'}else{'Right'};$value.ToolTip=$tip
-  Put $c $value $(if($stacked){$x}else{$x+43}) $(if($stacked){40}else{18})
+  Put $c $value 0 23
   $week=QuotaBar ($provider+'WeekBar') $cell $(if($null -eq $left){0}else{$left}) $(if($agy){'#99DDAA'}else{'#A8BECD'}) '#343D47';$week.Opacity=if($null -eq $left){0.35}else{1};$week.ToolTip=$tip;Put $c $week $x (50+$shift)
   if($null -ne $short){
    $bar=QuotaBar ($provider+'FiveHour') $cell $short $(if($short -le 15){'#E6B66B'}else{'#81B9E3'}) $(if($short -eq 0){'#6A5030'}else{'#343D47'})
@@ -121,6 +125,16 @@ function DrawQuota($c,$narrow){
   $when=if($shortReset){'Сброс '+$shortReset.ToString('HH:mm')}elseif($provider -eq 'Claude' -and $data.claude.limits_error -eq 'not_available'){'Источник без квот'}else{'Ожидание данных'}
   if($shortStale -and $null -ne $short){$when=$(if($shortReset){'Сброс '+$shortReset.ToString('HH:mm')+'*'}else{'Сохранённый остаток'})}
   $whenLabel=Label $when 9 '#939DA7';$whenLabel.Name=$provider+'ShortReset';$whenLabel.Width=$cell;$whenLabel.ToolTip=$shortLabel.ToolTip;Put $c $whenLabel $x ($footer+30)
+  if(-not (ViewOption 'limits')){foreach($child in @($c.Children)){if($child -ne $name){[void]$c.Children.Remove($child)}}}
+  if(ViewOption 'usage'){
+   $p=@((UsageData).providers|Where-Object name -eq $provider)|Select-Object -First 1
+   $dailyY=if(ViewOption 'limits'){124}else{29}
+   $caption=Label $(if($provider -eq 'Codex'){'ДЕНЬ · ПРОФИЛЬ'}else{'СЕГОДНЯ ↗'}) 8 '#8FA2B5';$caption.Name='DailyUsageHeading'+$provider;$caption.Width=$cell;Put $c $caption 0 $dailyY
+   $text=if($null -eq $p.day_tokens){'—'}else{$(if($p.partial){'от '}else{''})+(TokenAmount $p.day_tokens)+$(if($p.cached_day){'*'}else{''})}
+   $daily=Label $text $(if($cell -lt 70){12}else{15}) $(ProviderColor $provider);$daily.Name='Daily'+$provider;$daily.FontFamily='Bahnschrift';$daily.Width=$cell
+   $daily.ToolTip='За сегодня: '+$(if($null -ne $p.day_tokens){'{0:N0} токенов' -f $p.day_tokens}else{'нет данных'})+$(if($p.cached_day){"`nПоследний сохранённый итог"}else{''})+$(if($provider -eq 'Codex'){"`nВсе аккаунты локального профиля. Квота выше — текущего аккаунта."}else{''})
+   $tile.ToolTip=$daily.ToolTip+"`nНажмите, чтобы открыть историю и сравнение";Put $c $daily 0 ($dailyY+14)
+  }
  }
 }
 function UsageData{
@@ -135,50 +149,36 @@ function ProviderColor($name){switch($name){'Claude'{return '#BAABFF'}'Antigravi
 function TokenAmount($n){
  if($n -ge 1e6){return ('{0:0.#} млн' -f ($n/1e6))};if($n -ge 1e3){return ('{0:0.#} тыс' -f ($n/1e3))};return ('{0:0}' -f $n)
 }
-function UsageHeight($compact,$hot){return 39+40*@((UsageData).providers).Count+$(if(-not $compact -or $showDetails){70}else{0})+$(if($showDetails -or ($hot -and -not $compact)){42}else{0})}
+function DetailsExpanded($compact){return ([bool]$showDetails -xor (-not $compact))}
+function UsageHeight($compact,$hot){if(DetailsExpanded $compact){return 145};return 0}
 function DrawUsage($c,$y,$compact,$narrow){
+ if(-not (DetailsExpanded $compact)){return}
  $w=$c.Width;$usage=UsageData;$burn=$usage.burn;$valid=(Fresh $usage 180) -and $usage.observed;$hot=$valid -and $burn.alert
  $minutes=if($burn.window_seconds){[int]($burn.window_seconds/60)}else{15}
- $heading=Label 'ТОКЕНЫ ЗА СЕГОДНЯ' 9 '#AAB7C4' $true;$heading.Name='DailyUsageHeading';$heading.Width=$w-30;$heading.ToolTip='С начала дня по МСК. Сумма по сессиям каждого инструмента, не стоимость подписки.';Put $c $heading 0 $y
- $providers=@($usage.providers);$cw=$w;$tail=40*$providers.Count-21
- for($i=0;$i -lt $providers.Count;$i++){
-  $p=$providers[$i];$x=0;$rowY=$y+19+$i*40
-  $tip=$p.name+' · токены за сегодня: '+$(if($null -eq $p.day_tokens){'нет данных'}else{('{0:N0}' -f $p.day_tokens)})+"`n"+$(if($null -eq $p.per_min){'Скорость неизвестна'}else{(TokenAmount $p.per_min)+' ток/мин'})+"`n"+$p.note+$(if(-not @($p.series|Where-Object {$null -ne $_}).Count){"`nИстория графика недоступна"}else{''})
-  if($p.cached_day){$tip+="`n* Последний сохранённый итог; источник пока не обновился."}
-  if($p.day_updated_at){$tip+="`nОбновлено "+[DateTimeOffset]::FromUnixTimeSeconds([long]$p.day_updated_at).ToLocalTime().ToString('dd.MM.yyyy HH:mm')}
-  $click=FlatButton '' $w {param($s,$e) ShowUsageHistory $s.Tag};$click.Name='HistoryOpen'+$p.name;$click.Tag=$p.name.ToLowerInvariant();$click.Height=35;$click.Padding='0';$click.Background=Brush '#252F3B';$click.HorizontalContentAlignment='Stretch'
-  [Windows.Automation.AutomationProperties]::SetName($click,'История токенов '+$p.name)
-  $tile=[Windows.Controls.Canvas]::new();$tile.Width=$w;$tile.Height=35;$tile.IsHitTestVisible=$false;$click.Content=$tile
-  $dot=[Windows.Shapes.Rectangle]::new();$dot.Width=3;$dot.Height=15;$dot.RadiusX=1;$dot.Fill=Brush $p.color;Put $tile $dot 0 10
-  $legend=Label $p.name 11 '#D2DCE6';$legend.Name='Legend'+$p.name;$legend.Width=$w*0.47;$legend.ToolTip=$tip;Put $tile $legend 12 9
-  $text=if($null -eq $p.day_tokens){'—'}else{$(if($p.partial){'от '}else{''})+(TokenAmount $p.day_tokens)}
-  if($p.cached_day){$text+='*'}
-  $value=Label $text $(if($text.Length -gt 9){11}else{14}) $(if($p.cached_day){'#ADB8C3'}else{'#E5E8EB'});$value.Name='Daily'+$p.name;$value.FontFamily='Bahnschrift';$value.Width=$w*0.48-22;$value.TextAlignment='Right';$value.ToolTip=$tip;Put $tile $value ($w*0.5) 8
-  $arrow=Label '›' 18 '#8CA2B7';Put $tile $arrow ($w-17) 4
-  $click.ToolTip=$tip+"`nНажмите: история за неделю, месяц, всё время";Put $c $click 0 $rowY
- }
+ $providers=@($usage.providers)
  $speed=if($valid){$(if($usage.partial){'от '}else{''})+(TokenAmount $burn.per_min)+' ток/мин'}else{'нет данных'}
  $rate=Label ('Среднее за '+$minutes+' мин: '+$speed) 10 $(if($hot){'#E6B66B'}else{'#AAB7C4'});$rate.Name='TokenRate';$rate.Width=$w
- $rate.ToolTip='Средняя скорость по известным счётчикам за последние '+$minutes+' мин. Не расход за сутки.'+$(if($usage.partial){"`nПоказан минимум: у части источников неизвестна скорость."}else{''})+$(if($hot){"`n"+(BurnNoticeText $burn)}else{''});Put $c $rate 0 ($y+47+$tail)
- $more=FlatButton $(if($showDetails){'⌃'}else{'›'}) 25 {$script:showDetails=-not $showDetails;Draw};$more.Name='DetailsToggle';$more.Height=19;$more.ToolTip='График скорости и самая затратная сессия';Put $c $more ($w-25) ($y-3)
- if(-not $compact -or $showDetails){
-  $y+=$tail
-  Divider $c ($y+64)
-  $caption=Label 'Скорость за день' 9 '#AAB7C4';$caption.Width=$w*0.55;Put $c $caption 0 ($y+70)
+ $rate.ToolTip='Средняя скорость по известным счётчикам за последние '+$minutes+' мин. Не расход за сутки.'+$(if($usage.partial){"`nПоказан минимум: у части источников неизвестна скорость."}else{''})+$(if($hot){"`n"+(BurnNoticeText $burn)}else{''});Put $c $rate 0 ($y+2)
+ if(DetailsExpanded $compact){
+  Divider $c ($y+23)
+  $caption=Label 'Скорость за день' 9 '#AAB7C4';$caption.Width=$w*0.55;Put $c $caption 0 ($y+29)
   $allBars=@($providers|ForEach-Object {$_.series});$peak=($allBars|Measure-Object per_min -Maximum).Maximum
-  $scale=Label $(if($null -ne $peak){'до '+(TokenAmount $peak)+'/мин'}else{'нет истории'}) 9 '#AAB7C4';$scale.Width=$w*0.45;$scale.TextAlignment='Right';Put $c $scale ($w*0.55) ($y+70)
+  $scale=Label $(if($null -ne $peak){'до '+(TokenAmount $peak)+'/мин'}else{'нет истории'}) 9 '#AAB7C4';$scale.Width=$w*0.45;$scale.TextAlignment='Right';Put $c $scale ($w*0.55) ($y+29)
   $count=($providers|ForEach-Object {@($_.series).Count}|Measure-Object -Maximum).Maximum
   foreach($p in $providers){$bars=@($p.series|Where-Object {$null -ne $_});if(-not $bars.Count){continue}
    $spark=[Windows.Shapes.Polyline]::new();$spark.Name='Graph'+$p.name;$spark.ToolTip=$p.name+' · ток/мин · интервалы 15 мин · общая шкала';$spark.Stroke=Brush $p.color;$spark.StrokeThickness=1.2
-   for($j=0;$j -lt $bars.Count;$j++){$v=if($peak -gt 0){26*$bars[$j].per_min/$peak}else{0};[void]$spark.Points.Add([Windows.Point]::new(($w-2)*$j/[Math]::Max(1,$count-1),26-$v))};Put $c $spark 0 ($y+87)
+   for($j=0;$j -lt $bars.Count;$j++){$v=if($peak -gt 0){26*$bars[$j].per_min/$peak}else{0};[void]$spark.Points.Add([Windows.Point]::new(($w-2)*$j/[Math]::Max(1,$count-1),26-$v))};Put $c $spark 0 ($y+46)
   }
   $dates=@($allBars|Where-Object {$null -ne $_.at}|Sort-Object at)
-  if($dates.Count){foreach($end in @(0,1)){$stamp=if($end){$dates[-1].at}else{$dates[0].at};$label=Label ([DateTimeOffset]::FromUnixTimeSeconds([long]$stamp).ToOffset([TimeSpan]::FromHours(3)).ToString('HH:mm')) 8 '#939DA7';$label.Width=$w/2;$label.TextAlignment=if($end){'Right'}else{'Left'};Put $c $label ($end*$w/2) ($y+115)}}
+  if($dates.Count){foreach($end in @(0,1)){$stamp=if($end){$dates[-1].at}else{$dates[0].at};$label=Label ([DateTimeOffset]::FromUnixTimeSeconds([long]$stamp).ToOffset([TimeSpan]::FromHours(3)).ToString('HH:mm')) 8 '#939DA7';$label.Width=$w/2;$label.TextAlignment=if($end){'Right'}else{'Left'};Put $c $label ($end*$w/2) ($y+74)}}
  }
- if($showDetails -or ($hot -and -not $compact)){
-  $start=$y+130;$label=Label $(if($hot){'↑ Расход выше обычного'}else{'Сессия с наибольшим расходом'}) 9 $(if($hot){'#E6B66B'}else{'#AAB7C4'});$label.Width=$w;Put $c $label 0 ($start+2)
+ if(DetailsExpanded $compact){
+  $start=$y+90;$label=Label $(if($hot){'↑ Расход выше обычного'}else{'Сессия с наибольшим расходом'}) 9 $(if($hot){'#E6B66B'}else{'#AAB7C4'});$label.Width=$w;Put $c $label 0 ($start+2)
+  $leaderHeading=$label
   $leaders=@($burn.leaders|Select-Object -First 1)
-  if($valid -and $leaders.Count){$lead=$leaders[0];$row=FlatButton '' $w {param($s,$e) OpenSession $s.Tag};$row.Name='TokenLeader';$row.Tag=$lead;$row.ToolTip=$lead.provider+' · '+$lead.title;$row.IsEnabled=([string]$lead.id -match '^[0-9a-f-]{36}$');$row.Height=21;$label=Label ($(if($lead.provider){$lead.provider+' · '}else{''})+$lead.title) 10 '#BFB7A8';$label.Width=$w;$row.Content=$label;Put $c $row 0 ($start+17)}else{$empty=Label 'Пока не определена' 10 '#939DA7';$empty.Width=$w;Put $c $empty 0 ($start+17)}
+  if($valid -and $leaders.Count){$lead=$leaders[0];$row=FlatButton '' $w {param($s,$e) OpenSession $s.Tag};$row.Name='TokenLeader';$row.Tag=$lead;$row.ToolTip=$lead.provider+' · '+$lead.title;$row.IsEnabled=([string]$lead.id -match '^[0-9a-f-]{36}$');$row.Height=35;$label=Label ($(if($lead.provider){$lead.provider+' · '}else{''})+$lead.title) 10 '#BFB7A8';$label.Width=$w;$detail=if($burn.leader_basis -eq 'day'){(TokenAmount $lead.day_tokens)+' за день'}else{(TokenAmount $lead.per_min)+' ток/мин'};$label.Text+=' · '+$detail;$row.Content=$label;Put $c $row 0 ($start+17)}else{$empty=Label 'Пока не определена' 10 '#939DA7';$empty.Width=$w;Put $c $empty 0 ($start+17)}
+  if($valid -and $leaders.Count){$row.Content=$null;$box=[Windows.Controls.StackPanel]::new();$label.Text=($(if($lead.provider){$lead.provider+' · '}else{''})+$lead.title);[void]$box.Children.Add($label);$amount=Label $detail 10 '#E6B66B';$amount.Name='TokenLeaderAmount';[void]$box.Children.Add($amount);$row.Content=$box;$row.ToolTip+="`n"+$detail+$(if($lead.provider -eq 'Codex'){"`nПо всему локальному профилю Codex, включая другие аккаунты."}else{''})}
+  if($valid -and $leaders.Count -and $lead.provider -eq 'Codex' -and -not $hot){$leaderHeading.Text='Лидер расхода · весь профиль Codex'}
  }
 }
 
@@ -257,9 +257,9 @@ function DrawUnified{
  $h=$rootCanvas.Height-$bannerHeight;$ev=SelectedEvent;$nearest=NextEvent;$usage=UsageData;$burn=$usage.burn;$valid=(Fresh $usage 180) -and $usage.observed;$hot=$valid -and $burn.alert
  $calendarVisible=CalendarVisible;$sessionsVisible=ViewOption 'sessions';$limitsVisible=ViewOption 'limits';$usageVisible=ViewOption 'usage';$compactUsage=ViewOption 'compact_usage';$automatic=ViewOption 'auto_height'
  $narrow=$rootCanvas.Width -lt 300;$meetingHeight=if($calendarVisible){130}else{0}
- $quotaHeight=if($limitsVisible){QuotaHeight $narrow}else{0}
+ $quotaHeight=if($limitsVisible -or $usageVisible){QuotaHeight $narrow}else{0}
  $usageHeight=if($usageVisible){UsageHeight $compactUsage $hot}else{0}
- $resourceHeight=if($limitsVisible -or $usageVisible){26+$quotaHeight+$usageHeight+$(if($limitsVisible -and $usageVisible){10}else{0})}else{0}
+ $resourceHeight=if($limitsVisible -or $usageVisible){26+$quotaHeight+$usageHeight+$(if($usageHeight -gt 0){10}else{0})}else{0}
  $rows=@();foreach($source in @($data.codex,$data.claude,$data.antigravity)){if(Fresh $source 180){$rows+=@($source.sessions|Where-Object {$null -ne $_ -and ($showCompleted -or $_.status -ne 'idle')})}}
  $naturalSessions=if($sessionsVisible){$(if($automatic){50+31*[Math]::Min(4,[Math]::Max(1,$rows.Count))}else{134})}else{0}
  $cards=([int]$calendarVisible)+([int]$sessionsVisible)+([int]($resourceHeight -gt 0));$cardGaps=[Math]::Max(0,($cards-1)*10)
@@ -306,6 +306,7 @@ function DrawUnified{
  $active=@($all|Where-Object status -ne 'idle'|Sort-Object @{Expression={if($_.status -eq 'waiting'){0}elseif($_.status -eq 'working'){1}else{2}}},@{Expression='at';Descending=$true});$completed=@($all|Where-Object status -eq 'idle'|Sort-Object at -Descending)
  $waiting=@($active|Where-Object status -eq 'waiting').Count;$working=@($active|Where-Object status -eq 'working').Count
  CardHeading $c 'СЕССИИ' ([string]$waiting+' ждёт вас · '+$working+' работает')
+ if($data.codex.session_scope -eq 'account'){$c.Children[0].ToolTip='Codex: сессии текущего аккаунта. Других аккаунтов или без подтверждённого владельца скрыто: '+$data.codex.excluded_sessions+'.'}
  $scroll=[Windows.Controls.ScrollViewer]::new();$scroll.Name='SessionList';$scroll.Width=$w;$scroll.Height=[Math]::Max(28,$c.Height-24);$scroll.VerticalScrollBarVisibility='Hidden';$scroll.HorizontalScrollBarVisibility='Disabled';$stack=[Windows.Controls.StackPanel]::new();$scroll.Content=$stack;Put $c $scroll 0 24;$script:sessionScroll=$scroll
  $display=@($active);if($showCompleted){$display+=@($completed)}
  foreach($session in $display){
@@ -323,8 +324,8 @@ function DrawUnified{
  if($resourceHeight -gt 0){
   $resourceY=$meetingHeight+$meetingGap+$sessionHeight+$(if($sessionsVisible){10}else{0})
   $resource=Card $rootCanvas 'ResourcesCard' $resourceY $resourceHeight;$c=$resource.canvas;$script:resourceBorder=$resource.border
-  if($limitsVisible){DrawQuota $c $narrow}
-  if($usageVisible){$usageY=if($limitsVisible){$quotaHeight+10}else{0};if($limitsVisible){Divider $c ($quotaHeight+3)};DrawUsage $c $usageY $compactUsage $narrow}
+  if($limitsVisible -or $usageVisible){DrawQuota $c $narrow}
+  if($usageHeight -gt 0){Divider $c ($quotaHeight+3);DrawUsage $c ($quotaHeight+10) $compactUsage $narrow}
  }
  UpdateFreshnessIndicator
  $Foot.Text=$notice;$Foot.Visibility=if($notice){'Visible'}else{'Collapsed'}

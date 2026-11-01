@@ -1,5 +1,6 @@
 """Read quota through the installed Codex app-server; it owns all authentication."""
 import json
+import hashlib
 import os
 from pathlib import Path
 import queue
@@ -7,6 +8,19 @@ import shutil
 import subprocess
 import threading
 import time
+
+
+def account_fingerprint(home):
+    """Only the non-secret account identifier is used; tokens never leave this read."""
+    try:
+        account = json.loads((Path(home) / 'auth.json').read_text(encoding='utf-8-sig')).get('tokens', {}).get('account_id')
+        return hashlib.sha256(account.encode()).hexdigest() if isinstance(account, str) and account else None
+    except (OSError, ValueError, TypeError, AttributeError):
+        return None
+
+
+def owner_fingerprint(account):
+    return hashlib.sha256(account.encode()).hexdigest() if isinstance(account, str) and account else None
 
 
 def executable(config):
@@ -28,6 +42,8 @@ def normalize(result):
     meters = result.get('rateLimitsByLimitId')
     meter = meters.get('codex', {}) if isinstance(meters, dict) else result.get('rateLimits', {})
     output = {'checked_at': time.time()}
+    plan = str(meter.get('planType') or '')
+    output['account_label'] = 'Рабочий' if any(word in plan for word in ('business','team','enterprise')) else 'Личный' if plan in ('plus','pro','free') else ''
     for window in (meter.get('primary'), meter.get('secondary')):
         if not isinstance(window, dict) or 'usedPercent' not in window:
             continue
