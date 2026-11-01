@@ -30,7 +30,7 @@ def file_usage(path, provider, now):
     signature = (stat.st_dev, stat.st_ino, stat.st_size, stat.st_mtime_ns)
     key = (str(path), provider)
     old = _files.get(key)
-    if old and old[0] == signature:
+    if old and old[0] == signature and not old[1]['partial']:
         return old[1]
     totals, messages, previous = {}, {}, {}
     sid, fork_at, partial = str(path), None, False

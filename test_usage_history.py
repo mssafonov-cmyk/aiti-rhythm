@@ -1,6 +1,7 @@
 import copy
 from datetime import datetime
 import json
+import os
 from pathlib import Path
 import tempfile
 import unittest
@@ -57,7 +58,10 @@ class HistoryTests(unittest.TestCase):
         path=self.write('sessions','one.jsonl',[self.token('2026-11-01T08:00:00Z',100)])
         with path.open('a') as f:f.write('{')
         self.assertTrue(read_history(self.root,'codex',self.now)['partial'])
+        before=path.stat()
         path.write_text(json.dumps(self.token('2026-11-01T08:00:00Z',200))+'\n')
+        self.assertEqual(path.stat().st_size,before.st_size)
+        os.utime(path,ns=(before.st_atime_ns,before.st_mtime_ns))
         self.assertEqual(read_history(self.root,'codex',self.now)['days'][0]['total'],220)
 
     def test_archive_restart_rollover_dedupe_and_identity_isolation(self):
