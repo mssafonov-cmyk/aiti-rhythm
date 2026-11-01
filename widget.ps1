@@ -161,9 +161,7 @@ $script:auto=$false
 $null=MenuItem ('О программе · '+$env:RHYTHM_VERSION) {[void][Windows.MessageBox]::Show(('АйТи:Ритм '+$env:RHYTHM_VERSION+"`nИсходники: "+$env:RHYTHM_BUILD_COMMIT),'АйТи:Ритм')}
 $completedMenu=MenuItem 'Показывать завершённые сессии' {$script:showCompleted=$completedMenu.IsChecked;Draw;SaveState};$completedMenu.IsCheckable=$true;$completedMenu.IsChecked=$showCompleted
 $null=MenuItem 'Подключения и вид панели…' {
- $dialog=Join-Path $assetRoot 'connections.ps1'
- $power=Join-Path $env:SystemRoot 'System32/WindowsPowerShell/v1.0/powershell.exe'
- Start-Process -FilePath $power -WindowStyle Hidden -ArgumentList @('-NoProfile','-STA','-ExecutionPolicy','Bypass','-File',('"'+$dialog+'"'),'-DataRoot',('"'+$root+'"'))
+ Start-Process -FilePath $env:RHYTHM_CORE_EXE -WindowStyle Hidden -ArgumentList ($env:RHYTHM_CORE_PREFIX+' --settings --data-dir "'+$root+'"')
 }
 $null=MenuItem 'Компактная ширина · 260' {$right=$win.Left+$win.Width;$win.Width=260;$win.Left=$right-$win.Width;FitScreen;Draw;SaveState}
 $null=MenuItem 'Обычная ширина · 380' {$right=$win.Left+$win.Width;$win.Width=380;$win.Left=$right-$win.Width;FitScreen;Draw;SaveState}

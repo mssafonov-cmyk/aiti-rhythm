@@ -120,5 +120,17 @@ def claude_remote():
             result=read_token_history(legacy)
             self.assertEqual(result['days'][0]['total'],15);http.assert_not_called()
 
+    def test_antigravity_daily_steps_cache_isolated_from_live_worker(self):
+        from antigravity_metrics import usage_rows, _cache
+        folder='brain/00000000-0000-0000-0000-000000000001/.system_generated/logs'
+        row=dict(type='PLANNER_RESPONSE',step_index=0,created_at='2026-10-31T20:59:00Z',
+                 input_tokens=100,output_tokens=20,cache_read_tokens=80)
+        path=self.write(folder,'transcript.jsonl',[row,dict(row),dict(row,step_index=1,created_at='2026-10-31T21:01:00Z',output_tokens=40)])
+        usage_rows(path);before=copy.deepcopy(_cache[path])
+        result=read_history(self.root,'antigravity',self.now)
+        self.assertEqual([(d['date'],d['total']) for d in result['days']], [('2026-10-31',120),('2026-11-01',140)])
+        self.assertEqual(_cache[path],before)
+        self.assertEqual(read_history(self.root,'antigravity',self.now),result)
+
 
 if __name__=='__main__':unittest.main()

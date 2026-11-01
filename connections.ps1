@@ -52,6 +52,11 @@ Add-Type -AssemblyName PresentationFramework,PresentationCore,WindowsBase
    <ScrollViewer x:Name="PageScroll" Grid.Row="3" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Padding="0,0,9,0" Focusable="False"><Grid>
     <StackPanel x:Name="PageView" Visibility="Collapsed">
      <Border Style="{StaticResource Card}"><StackPanel>
+      <TextBlock Text="ЗАПУСК ПРИЛОЖЕНИЯ" Foreground="#56D8F1" FontSize="11" FontWeight="SemiBold"/>
+      <CheckBox x:Name="Startup" Content="Запускать при входе в Windows" Margin="0,14,0,8"/>
+      <TextBlock Text="Ритм откроется автоматически для вашего пользователя." Foreground="#97A9BB" FontSize="12" TextWrapping="Wrap"/>
+     </StackPanel></Border>
+     <Border Style="{StaticResource Card}"><StackPanel>
       <TextBlock Text="БЛОКИ ПАНЕЛИ" Foreground="#56D8F1" FontSize="11" FontWeight="SemiBold"/>
       <TextBlock Text="Оставьте то, что нужно" FontSize="17" FontWeight="SemiBold" Margin="0,12,0,8"/>
       <TextBlock Text="Скрытие блока сохраняет подключение и доступы. Кубик продолжает работать независимо от вида панели." Style="{StaticResource Hint}"/>
@@ -166,6 +171,7 @@ $window=[Windows.Markup.XamlReader]::Load([Xml.XmlNodeReader]::new($xaml))
 $controls=@{};foreach($name in @('Antigravity','AntigravityQuota','AntigravityHome','ClaudeSource','ClaudeCommand','CalendarCommand','Codex','CodexHome','CodexExe','Limits','Claude','ClaudeHome','Calendar','Kind','CalendarName','Timezone','CalendarUrl','Username','Password','Mapping','Cube','CubeHost','Rotation','Titles','Save','Cancel','Status')){$controls[$name]=$window.FindName($name)}
 $viewControls=@{calendar='ViewCalendar';sessions='ViewSessions';limits='ViewLimits';usage='ViewUsage';compact_usage='ViewCompactUsage';auto_height='ViewAutoHeight'}
 foreach($name in $viewControls.Values){$controls[$name]=$window.FindName($name)}
+$controls.Startup=$window.FindName('Startup');$controls.Startup.IsChecked=$env:RHYTHM_AUTOSTART -eq '1'
 $icon=Join-Path $PSScriptRoot 'indicators.ico'
 if(Test-Path -LiteralPath $icon){$window.Icon=[Windows.Media.Imaging.BitmapFrame]::Create([Uri]$icon);$window.FindName('AppIcon').Source=$window.Icon}
 $window.MaxHeight=[Windows.SystemParameters]::WorkArea.Height-24
@@ -230,6 +236,7 @@ $controls.Save.Add_Click({
    view=@{calendar=[bool]$controls.ViewCalendar.IsChecked;sessions=[bool]$controls.ViewSessions.IsChecked;limits=[bool]$controls.ViewLimits.IsChecked;usage=[bool]$controls.ViewUsage.IsChecked;compact_usage=[bool]$controls.ViewCompactUsage.IsChecked;auto_height=[bool]$controls.ViewAutoHeight.IsChecked}
    secrets=@{claude_command=$(if($controls.ClaudeCommand.Password){ConvertFrom-Json -InputObject $controls.ClaudeCommand.Password}else{$null});calendar_command=$(if($controls.CalendarCommand.Password){ConvertFrom-Json -InputObject $controls.CalendarCommand.Password}else{$null});calendar_url=$controls.CalendarUrl.Password.Trim();calendar_username=$controls.Username.Text.Trim();calendar_password=$controls.Password.Password}
   }
+  if(-not $SelfTest){$values.startup=[bool]$controls.Startup.IsChecked}
   $python=$env:RHYTHM_CORE_EXE
   $start=[Diagnostics.ProcessStartInfo]::new();$start.FileName=$python;$start.Arguments=$env:RHYTHM_CORE_PREFIX+' --configure-stdin';$start.UseShellExecute=$false;$start.CreateNoWindow=$true;$start.RedirectStandardInput=$true;$start.RedirectStandardOutput=$true;$start.RedirectStandardError=$true
   $process=[Diagnostics.Process]::Start($start);$payload=[Text.Encoding]::UTF8.GetBytes(($values|ConvertTo-Json -Depth 8 -Compress));$process.StandardInput.BaseStream.Write($payload,0,$payload.Length);$process.StandardInput.BaseStream.Close();$output=$process.StandardOutput.ReadToEnd();$errorText=$process.StandardError.ReadToEnd();$process.WaitForExit()

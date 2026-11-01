@@ -7,7 +7,7 @@ from safeio import atomic_json
 from history_readers import day
 from usage_metrics import day_total
 
-PROVIDERS = ('codex', 'claude')
+PROVIDERS = ('codex', 'claude', 'antigravity')
 
 
 def valid_time(value):

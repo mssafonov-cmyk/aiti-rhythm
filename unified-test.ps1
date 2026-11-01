@@ -12,7 +12,7 @@ function Preview($name){
  $encoder=[Windows.Media.Imaging.PngBitmapEncoder]::new();$encoder.Frames.Add([Windows.Media.Imaging.BitmapFrame]::Create($bmp));$file=[IO.File]::Create((Join-Path $root $name));$encoder.Save($file);$file.Dispose()
 }
 $win.Width=380;$win.Height=580;$win.UpdateLayout();Draw;$win.UpdateLayout();Preview 'rhythm-preview.png';$small=(Control 'SessionList').ActualHeight
-$win.Width=500;$win.Height=800;$win.UpdateLayout();Draw;$win.UpdateLayout();Preview 'rhythm-expanded.png';$large=(Control 'SessionList').ActualHeight
+$win.Width=500;$win.Height=900;$win.UpdateLayout();Draw;$win.UpdateLayout();Preview 'rhythm-expanded.png';$large=(Control 'SessionList').ActualHeight
 if($large -le $small+150){throw 'Session viewport did not expand'}
 $results+=@{checks='unified responsive layout';small=$small;large=$large;passed=$true}
 $now=NowSeconds;$time=[DateTimeOffset]::UtcNow.ToOffset([TimeSpan]::FromHours(3))
@@ -292,7 +292,22 @@ for($i=0;$i -lt 75;$i++){$historyDays+=[pscustomobject]@{date=$historyToday.AddD
 $data.usage|Add-Member -NotePropertyName history -NotePropertyValue ([pscustomobject]@{
  codex=[pscustomobject]@{today=$historyToday.ToString('yyyy-MM-dd');days=$historyDays};claude=[pscustomobject]@{today=$historyToday.ToString('yyyy-MM-dd');days=@()}
 }) -Force
-Draw;Click (Control 'HistoryOpenCodex');$historyWindow.UpdateLayout();DrawHistory
+foreach($width in @(260,380)){
+ $win.Width=$width;Draw;$win.UpdateLayout();Draw;$win.UpdateLayout()
+ foreach($provider in @('Codex','Claude','Antigravity')){
+  $button=Control ('HistoryOpen'+$provider)
+  foreach($fraction in @(0.1,0.5,0.9)){
+   $point=$button.TranslatePoint([Windows.Point]::new($button.ActualWidth*$fraction,17),$win)
+   $hit=$win.InputHitTest($point)
+   while($hit -and $hit -isnot [Windows.Controls.Button]){$hit=[Windows.Media.VisualTreeHelper]::GetParent($hit)}
+   if($hit -ne $button){throw ('History tile is not the pointer target: '+$provider+' at '+$width)}
+   Click $hit
+   if(-not $historyWindow.IsVisible -or $historyTitle.Text -ne $provider){throw 'Pointer-target click did not open the correct provider'}
+   $historyWindow.Close()
+  }
+ }
+}
+$script:historyPeriod='week';Click (Control 'HistoryOpenCodex');$historyWindow.UpdateLayout();DrawHistory
 if($historyTitle.Text -ne 'Codex' -or (HistoryRows).Count -ne 7 -or $historyTotal.Text -ne (TokenAmount 91000)){throw 'Week history click or total failed'}
 Click $historyPeriodButtons[1]
 if((HistoryRows).Count -ne 30 -or $historyTotal.Text -ne (TokenAmount 735000)){throw 'Month history total failed'}

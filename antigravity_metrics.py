@@ -31,15 +31,16 @@ def stamp(value):
         return 0
 
 
-def usage_rows(path):
+def usage_rows(path, cache=None):
     """Incremental, bounded JSONL reader. Cache stores counters/timestamps, no text."""
+    cache = _cache if cache is None else cache
     stat = path.stat()
     identity = (stat.st_dev, stat.st_ino)
-    entry = _cache.get(path)
+    entry = cache.get(path)
     if (not entry or entry['identity'] != identity or stat.st_size < entry['offset'] or
             (entry['size'] == stat.st_size and entry['mtime'] != stat.st_mtime_ns)):
         entry = dict(identity=identity, offset=0, size=0, mtime=0, steps={}, partial=False)
-        _cache[path] = entry
+        cache[path] = entry
     with path.open('rb') as stream:
         stream.seek(entry['offset'])
         while stream.tell() < stat.st_size:

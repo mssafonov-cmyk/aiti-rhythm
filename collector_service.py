@@ -37,7 +37,9 @@ class Collector:
     def history_identity(self, name, settings):
         section = settings[name]
         source = section.get('source', 'local') if name == 'claude' else 'local'
-        if source == 'external':
+        if name == 'antigravity':
+            location = os.path.normcase(os.path.abspath(profile(section['home'])))
+        elif source == 'external':
             location = load_secrets(self.root).get('claude_command', [])
         else:
             location = os.path.normcase(os.path.abspath(provider_home(section['home'],
@@ -45,6 +47,8 @@ class Collector:
         return hashlib.sha256(json.dumps([name, source, location], sort_keys=True).encode()).hexdigest()
 
     def history_work(self, name, settings):
+        if name == 'antigravity':
+            return read_history(profile(settings[name]['home']), name)
         if name == 'claude' and settings[name].get('source') == 'external':
             command = load_secrets(self.root).get('claude_command', [])
             if '--legacy-root' in command and '--legacy-provider' in command:
@@ -57,7 +61,7 @@ class Collector:
 
     def history_step(self, snapshot, settings, now):
         identities = {}
-        for name in ('codex', 'claude'):
+        for name in ('codex', 'claude', 'antigravity'):
             identity = self.history_identity(name, settings)
             identities[name] = identity
             if identity != self.history_ids.get(name):

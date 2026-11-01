@@ -16,8 +16,9 @@ function HistoryRows{
 }
 function DrawHistory{
  if(-not $script:historyWindow){return}
- $name=if($script:historyProvider -eq 'claude'){'Claude'}else{'Codex'};$color=ProviderColor $name
+ $name=switch($script:historyProvider){'claude'{'Claude'}'antigravity'{'Antigravity'}default{'Codex'}};$color=ProviderColor $name
  $script:historyWindow.Title=$name+' — история токенов';$script:historyTitle.Text=$name;$script:historyTitle.Foreground=Brush $color
+ $script:historyMethod.Text=if($script:historyProvider -eq 'antigravity'){'Вход + выход по счётчикам Antigravity; кэш отдельно. Сегодня — неполный день.'}else{'Вход + выход, включая кэш. Не стоимость и не процент подписки. Сегодня — неполный день.'}
  foreach($button in $script:historyPeriodButtons){$selected=$button.Tag -eq $script:historyPeriod;$button.Background=Brush $(if($selected){'#314153'}else{'#202A35'});$button.Foreground=Brush $(if($selected){'#F1F5FA'}else{'#A4B2C1'})}
  $rows=@(HistoryRows);$known=@($rows|Where-Object {$null -ne $_.total});$missing=$rows.Count-$known.Count
  $total=($known|Measure-Object total -Sum).Sum;$peak=($known|Measure-Object total -Maximum).Maximum
@@ -55,7 +56,7 @@ function DrawHistory{
  if(-not $known.Count){$empty=Label 'Пока нет истории за этот период' 17 '#9CADBF';$empty.Width=440;Put $chart $empty 30 80}
 }
 function ShowUsageHistory($provider){
- if($provider -notin @('codex','claude')){return}
+ if($provider -notin @('codex','claude','antigravity')){return}
  $script:historyProvider=$provider
  if($script:historyWindow -and $script:historyWindow.IsVisible){DrawHistory;[void]$script:historyWindow.Activate();return}
  [xml]$hx=@'
@@ -72,13 +73,14 @@ function ShowUsageHistory($provider){
   </Grid>
   <Grid Grid.Row="4"><Grid.ColumnDefinitions><ColumnDefinition Width="72"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions><Canvas x:Name="HAxis" VerticalAlignment="Top"/><ScrollViewer x:Name="HScroll" Grid.Column="1" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled"><Canvas x:Name="HChart" VerticalAlignment="Top"/></ScrollViewer></Grid>
   <TextBlock x:Name="HHover" Grid.Row="5" Text="Наведите на день, чтобы увидеть точное значение" FontSize="12" Foreground="#BDD0E0"/>
-  <StackPanel Grid.Row="6"><TextBlock x:Name="HNotice" FontSize="11" TextWrapping="Wrap" Foreground="#9DAFC1"/><TextBlock Text="Вход + выход, включая кэш. Не стоимость и не процент подписки. Сегодня — неполный день." FontSize="10" TextWrapping="Wrap" Foreground="#6F849A" Margin="0,7,0,0"/></StackPanel>
+  <StackPanel Grid.Row="6"><TextBlock x:Name="HNotice" FontSize="11" TextWrapping="Wrap" Foreground="#9DAFC1"/><TextBlock x:Name="HMethod" FontSize="10" TextWrapping="Wrap" Foreground="#6F849A" Margin="0,7,0,0"/></StackPanel>
  </Grid>
 </Window>
 '@
  $script:historyWindow=[Windows.Markup.XamlReader]::Load([Xml.XmlNodeReader]::new($hx));$script:historyWindow.Owner=$win
  $script:historyWindow.Resources=$win.Resources
  foreach($pair in @(@('historyTitle','HTitle'),@('historyRange','HRange'),@('historyTotal','HTotal'),@('historyCoverage','HCoverage'),@('historyPeak','HPeak'),@('historyChart','HChart'),@('historyAxis','HAxis'),@('historyScroll','HScroll'),@('historyHover','HHover'),@('historyNotice','HNotice'))){Set-Variable -Scope Script -Name $pair[0] -Value $script:historyWindow.FindName($pair[1])}
+ $script:historyMethod=$script:historyWindow.FindName('HMethod')
  $periods=$script:historyWindow.FindName('HPeriods');$script:historyPeriodButtons=@()
  foreach($item in @(@('week','Неделя'),@('month','Месяц'),@('all','Всё время'))){$b=HistoryButton $item[1] ('HistoryPeriod'+$item[0]) 100 {param($s,$e) $script:historyPeriod=$s.Tag;$script:historyHover.Text='Наведите на день, чтобы увидеть точное значение';DrawHistory;$script:historyScroll.ScrollToRightEnd()};$b.Tag=$item[0];[void]$periods.Children.Add($b);$script:historyPeriodButtons+=$b}
  $script:historyWindow.Add_SizeChanged({DrawHistory})

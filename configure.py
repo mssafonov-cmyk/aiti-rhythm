@@ -9,6 +9,8 @@ from runtime import HERE, load_secrets, load_settings, save_connection
 
 
 def validate(values, root=HERE):
+    if 'startup' in values and type(values['startup']) is not bool:
+        raise ValueError('Startup must be a boolean')
     current = load_settings(root)
     combined_secrets = dict(load_secrets(root), **{key: value for key, value in values.get('secrets', {}).items() if value})
     claude = dict(current['claude'], **values.get('claude', {}))
@@ -48,6 +50,9 @@ def main():
         from app_paths import core_command
         undo = sync_capture(previous, desired, HERE, core_command())
         try:
+            if 'startup' in values:
+                from startup import set_enabled
+                undo.append(set_enabled(values['startup']))
             save_connection(values)
         except Exception:
             for rollback in reversed(undo):rollback()

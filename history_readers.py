@@ -9,6 +9,7 @@ import time
 
 MSK = timezone(timedelta(hours=3))
 _files = {}
+_agy_files = {}
 
 
 def number(value):
@@ -91,6 +92,21 @@ def file_usage(path, provider, now):
 def read_history(home, provider, now=None):
     now = time.time() if now is None else now
     home = Path(home)
+    if provider == 'antigravity':
+        from antigravity_metrics import usage_rows
+        totals, partial = {}, False
+        for path in (home / 'brain').glob('*/.system_generated/logs/transcript.jsonl'):
+            try:
+                # A separate cache avoids races with the live session worker.
+                for row in usage_rows(path, _agy_files):
+                    if row['at'] <= now:
+                        date = day(row['at'])
+                        totals[date] = totals.get(date, 0) + row['input_tokens'] + row['output_tokens']
+                partial |= _agy_files[path]['partial']
+            except OSError:
+                partial = True
+        return dict(days=[dict(date=d, total=n, partial=partial) for d, n in sorted(totals.items())],
+                    checked_at=now, partial=partial, available=(home/'brain').is_dir())
     folders = [home / 'sessions', home / 'archived_sessions'] if provider == 'codex' else [home / 'projects']
     totals, sessions, messages, seen = {}, {}, {}, set()
     partial = False

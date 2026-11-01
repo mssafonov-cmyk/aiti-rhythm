@@ -7,7 +7,7 @@ import re
 import shutil
 import zipfile
 
-VERSION = '1.6.0'
+VERSION = '1.6.1'
 FILES = (
     'README.md', 'PACKAGE-README.txt', 'LICENSE', 'THIRD-PARTY-NOTICES.md', 'SECURITY.md',
     '.gitignore', '.github/workflows/check.yml', 'requirements.txt', 'requirements-build.txt',
@@ -19,7 +19,7 @@ FILES = (
     'indicators.ico', 'unified-test.ps1', 'test_burn.py', 'test_sessions.py', 'test_local_cache.py',
     'test_safeio.py', 'test_connections.py', 'build_release.py',
     'test_installation.py', 'test_claude_usage.py', 'test_claude_retry.py', 'test_usage_memory.py', 'verify_installer.py',
-    'usage_history.py', 'history_readers.py', 'usage-history.ps1', 'test_usage_history.py',
+    'usage_history.py', 'history_readers.py', 'usage-history.ps1', 'test_usage_history.py', 'startup.py', 'test_startup.py',
 )
 
 

@@ -46,6 +46,7 @@ def main():
     parser.add_argument('--self-test', action='store_true')
     parser.add_argument('--settings-test', action='store_true')
     parser.add_argument('--settings', action='store_true')
+    parser.add_argument('--autostart', choices=['status', 'on', 'off'])
     parser.add_argument('--probe', action='store_true')
     parser.add_argument('--shutdown', action='store_true')
     parser.add_argument('--recover', action='store_true')
@@ -69,6 +70,12 @@ def main():
     os.environ['RHYTHM_CORE_EXE'] = core_command()[0]
     os.environ['RHYTHM_CORE_PREFIX'] = '' if getattr(sys, 'frozen', False) else '"' + str(ASSETS / 'rhythm_app.py') + '"'
     os.environ['RHYTHM_VERSION'] = VERSION
+    from startup import enabled, set_enabled
+    if args.autostart:
+        if args.autostart != 'status':set_enabled(args.autostart == 'on')
+        print(json.dumps({'autostart': enabled()}))
+        return 0
+    os.environ['RHYTHM_AUTOSTART'] = '1' if enabled() else '0'
     build_file = ASSETS / 'build-info.json'
     build_info = json.loads(build_file.read_text(encoding='utf-8')) if build_file.exists() else {}
     os.environ['RHYTHM_BUILD_COMMIT'] = build_info.get('source_commit', 'source')
