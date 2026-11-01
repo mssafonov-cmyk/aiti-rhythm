@@ -358,5 +358,12 @@ $list.ScrollToHome();$win.UpdateLayout();Preview 'rhythm-sessions-expanded.png'
 $win.Width=260;Draw;$win.UpdateLayout();Preview 'rhythm-sessions-expanded-narrow.png'
 Click (Control 'SessionsToggle');Draw;$win.UpdateLayout();if((Control 'SessionList').Height -ge $list.Height -or (Control 'SessionRate')){throw 'Session collapse must restore compact rows'}
 $results+=@{checks='18 sessions expand/collapse;scroll to last row;visible rate and ratio;380/260 DIP';passed=$true}
+ShowAbout;$aboutWindow.UpdateLayout()
+if((FindControl $aboutWindow 'AboutAuthor').Text -ne 'Автор: Максим Сафонов' -or $aboutGithubLink.NavigateUri.AbsoluteUri -ne 'https://github.com/mssafonov-cmyk/aiti-rhythm'){throw 'About author or repository link missing'}
+$nav=[Windows.Navigation.RequestNavigateEventArgs]::new($aboutGithubLink.NavigateUri,'');$nav.RoutedEvent=[Windows.Documents.Hyperlink]::RequestNavigateEvent;$aboutGithubLink.RaiseEvent($nav)
+if($script:testAboutUrl -ne 'https://github.com/mssafonov-cmyk/aiti-rhythm'){throw 'About GitHub link is not connected'}
+$bmp=[Windows.Media.Imaging.RenderTargetBitmap]::new([int]$aboutWindow.ActualWidth,[int]$aboutWindow.ActualHeight,96,96,[Windows.Media.PixelFormats]::Pbgra32);$bmp.Render($aboutWindow)
+$encoder=[Windows.Media.Imaging.PngBitmapEncoder]::new();$encoder.Frames.Add([Windows.Media.Imaging.BitmapFrame]::Create($bmp));$file=[IO.File]::Create((Join-Path $root 'rhythm-about.png'));$encoder.Save($file);$file.Dispose();$aboutWindow.Close()
+$results+=@{checks='About credits Maxim Safonov and opens the exact GitHub repository';passed=$true}
 $results|ConvertTo-Json|Set-Content -LiteralPath (Join-Path $root 'widget-test.json') -Encoding UTF8
 $script:closing=$true;$win.Close()

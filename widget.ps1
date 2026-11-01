@@ -158,7 +158,20 @@ $Power.Add_Click({$win.Hide()})
 $menu=[Windows.Controls.ContextMenu]::new()
 function MenuItem($text,$handler){$m=[Windows.Controls.MenuItem]::new();$m.Header=$text;$m.Add_Click($handler);[void]$menu.Items.Add($m);return $m}
 $script:auto=$false
-$null=MenuItem ('О программе · '+$env:RHYTHM_VERSION) {[void][Windows.MessageBox]::Show(('АйТи:Ритм '+$env:RHYTHM_VERSION+"`nИсходники: "+$env:RHYTHM_BUILD_COMMIT),'АйТи:Ритм')}
+function ShowAbout{
+ if($script:aboutWindow -and $script:aboutWindow.IsVisible){[void]$script:aboutWindow.Activate();return}
+ $dialog=[Windows.Window]::new();$dialog.Title='О программе · АйТи:Ритм';$dialog.Width=390;$dialog.SizeToContent='Height';$dialog.ResizeMode='NoResize';$dialog.WindowStartupLocation='CenterOwner';$dialog.Owner=$win;$dialog.ShowInTaskbar=$false;$dialog.Background=Brush '#1C232C'
+ $panel=[Windows.Controls.StackPanel]::new();$panel.Margin='20';$dialog.Content=$panel
+ $title=Label ('АйТи:Ритм '+$env:RHYTHM_VERSION) 19 '#E5E8EB' $true;[void]$panel.Children.Add($title)
+ $author=Label 'Автор: Максим Сафонов' 13 '#E5E8EB';$author.Name='AboutAuthor';$author.Margin='0,12,0,10';[void]$panel.Children.Add($author)
+ $text=[Windows.Controls.TextBlock]::new();$text.FontSize=12;$text.Margin='0,0,0,12'
+ $link=[Windows.Documents.Hyperlink]::new([Windows.Documents.Run]::new('github.com/mssafonov-cmyk/aiti-rhythm ↗'));$link.NavigateUri=[Uri]'https://github.com/mssafonov-cmyk/aiti-rhythm';$link.Foreground=Brush '#56D8F1';$link.ToolTip=$link.NavigateUri.AbsoluteUri
+ $link.Add_RequestNavigate({param($sender,$e) if($SelfTest){$script:testAboutUrl=$e.Uri.AbsoluteUri}else{Start-Process 'https://github.com/mssafonov-cmyk/aiti-rhythm'};$e.Handled=$true});[void]$text.Inlines.Add($link);[void]$panel.Children.Add($text)
+ $build=Label ('Сборка: '+$env:RHYTHM_BUILD_COMMIT) 9 '#939DA7';$build.TextWrapping='Wrap';[void]$panel.Children.Add($build)
+ $close=SmallButton 'Закрыть' 90 {param($sender,$e) [Windows.Window]::GetWindow($sender).Close()};$close.Margin='0,16,0,0';$close.HorizontalAlignment='Right';[void]$panel.Children.Add($close)
+ $script:aboutWindow=$dialog;$script:aboutGithubLink=$link;$dialog.Show()
+}
+$null=MenuItem ('О программе · '+$env:RHYTHM_VERSION) {ShowAbout}
 $completedMenu=MenuItem 'Показывать завершённые сессии' {$script:showCompleted=$completedMenu.IsChecked;Draw;SaveState};$completedMenu.IsCheckable=$true;$completedMenu.IsChecked=$showCompleted
 $null=MenuItem 'Подключения и вид панели…' {
  Start-Process -FilePath $env:RHYTHM_CORE_EXE -WindowStyle Hidden -ArgumentList ($env:RHYTHM_CORE_PREFIX+' --settings --data-dir "'+$root+'"')
