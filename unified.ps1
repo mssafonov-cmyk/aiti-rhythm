@@ -306,7 +306,7 @@ function DrawUnified{
  $active=@($all|Where-Object status -ne 'idle'|Sort-Object @{Expression={if($_.status -eq 'waiting'){0}elseif($_.status -eq 'working'){1}else{2}}},@{Expression='at';Descending=$true});$completed=@($all|Where-Object status -eq 'idle'|Sort-Object at -Descending)
  $waiting=@($active|Where-Object status -eq 'waiting').Count;$working=@($active|Where-Object status -eq 'working').Count
  CardHeading $c 'СЕССИИ' ([string]$waiting+' ждёт вас · '+$working+' работает')
- if($data.codex.session_scope -eq 'account'){$c.Children[0].ToolTip='Codex: сессии текущего аккаунта. Других аккаунтов или без подтверждённого владельца скрыто: '+$data.codex.excluded_sessions+'.'}
+ if($data.codex.session_scope -eq 'live_and_account_history'){$c.Children[0].ToolTip='Codex: активные и недавние сессии (30 мин) всех аккаунтов; более старая история — текущего аккаунта. «Работает» определяется по событиям выполнения, а не по числу открытых окон.'}
  $scroll=[Windows.Controls.ScrollViewer]::new();$scroll.Name='SessionList';$scroll.Width=$w;$scroll.Height=[Math]::Max(28,$c.Height-24);$scroll.VerticalScrollBarVisibility='Hidden';$scroll.HorizontalScrollBarVisibility='Disabled';$stack=[Windows.Controls.StackPanel]::new();$scroll.Content=$stack;Put $c $scroll 0 24;$script:sessionScroll=$scroll
  $display=@($active);if($showCompleted){$display+=@($completed)}
  foreach($session in $display){

@@ -55,9 +55,11 @@ def session_records(path):
 
 class SessionState:
     def __init__(self):
-        self.status='unknown';self.at=0;self.pending={}
+        self.status='unknown';self.at=0;self.activity_at=0;self.pending={}
     def consume(self,r,dt):
         p=r.get('payload',{});kind=p.get('type')
+        if r.get('type') in ('response_item','event_msg'):
+            self.activity_at=max(self.activity_at,dt.timestamp())
         if r.get('type')=='response_item':
             if p.get('role')=='user':self.pending.clear()
             name=p.get('name','')
@@ -83,13 +85,13 @@ def codex_local(home=None):
         if minutes in (15,30,60):window=minutes*60
     except (OSError,ValueError,TypeError):pass
     totals = dict(input=0, output=0, cache=0)
-    sessions = []; seen_sessions = set(); observed = False; consumers=[];all_points=[]
+    sessions = []; observed = False; consumers=[];all_points=[]
     source_home=Path(home) if home is not None else Path.home()/'.codex'
-    current_account=account_fingerprint(source_home); excluded_sessions=0
+    current_account=account_fingerprint(source_home); excluded_sessions=0;recent_other_sessions=0
     index=source_home/'session_index.jsonl'
     titles={r.get('id'):r.get('thread_name','') for r in records(index)} if index.exists() else {}
     from session_navigation import codex_navigation
-    destinations = {}
+    samples = {}
     for p in (source_home/'sessions').rglob('*.jsonl'):
         if p.stat().st_mtime < now.timestamp()-7*86400: continue
         prev = {}; state = 'unknown'; last = 0; project = ''; sid = str(p);navigation={'kind':'manual'};owner=None
@@ -122,28 +124,43 @@ def codex_local(home=None):
                     delta=max(0,usage.get(src,0)-prev.get(src,0)) if not prev.get('_fork') else 0
                     sums[dst]+=delta
             prev=usage
-        changed=p.stat().st_mtime
-        if sid not in destinations or changed >= destinations[sid][0]:
-            destinations[sid]=(changed,navigation)
-        if sid in seen_sessions: continue
-        seen_sessions.add(sid)
+        # A thread can have multiple retained journals. File-copy time and traversal
+        # order are not evidence of current activity; take the newest event stream.
+        rank=(status.activity_at,p.stat().st_mtime)
+        previous=samples.get(sid)
+        if previous:
+            # A resumed/cropped copy can have a smaller counter history. Updating
+            # status must not erase spend already present in the complete copy.
+            if sum(previous['sums'][k] for k in ('input','output'))>sum(sums[k] for k in ('input','output')):
+                points=previous['points']
+            sums={key:max(sums[key],previous['sums'][key]) for key in sums}
+        if sid not in samples or rank>samples[sid]['rank']:
+            samples[sid]=dict(rank=rank,navigation=navigation,owner=owner,project=project,
+                              sums=sums,points=points,status=status)
+        else:
+            previous.update(sums=sums,points=points)
+    for sid,sample in samples.items():
+        navigation=sample['navigation'];owner=sample['owner'];project=sample['project']
+        sums=sample['sums'];points=sample['points'];status=sample['status']
         all_points.extend(points)
         rate=velocity(points,now.timestamp(),window)
         if sums['input']+sums['output']:
             consumers.append(dict(id=sid,title=titles.get(sid,project),project=project,navigation=navigation,
                                   day_tokens=sums['input']+sums['output'],**rate))
         for k in totals: totals[k]+=sums[k]
-        state=status.status;last=status.at
+        state=status.status;last=status.activity_at or status.at
+        recent=0<=time.time()-last<=1800
+        if state=='working' and not recent:state='unknown'
         if last>=now.replace(hour=0,minute=0,second=0,microsecond=0).timestamp() or state in ('working','waiting'):
-            if current_account and owner != current_account:
+            # creator_account_id is immutable when a chat is resumed after login
+            # changes. Never discard actual work just because its creator differs.
+            resumed=recent and state in ('working','waiting','idle','interrupted')
+            if current_account and owner != current_account and not resumed:
                 excluded_sessions+=1
                 continue
-            # Never infer waiting from silence. Old unfinished turns are explicitly unknown.
-            if state=='working' and time.time()-p.stat().st_mtime>1800: state='unknown'
+            if current_account and owner != current_account:recent_other_sessions+=1
             sessions.append(dict(provider='Codex',project=project,status=state,at=last,
                                  id=sid,title=titles.get(sid,project),rate=rate,navigation=navigation))
-    for item in sessions+consumers:
-        item['navigation']=destinations[item['id']][1]
     consumers.sort(key=lambda v:(v['per_min'],v['day_tokens']),reverse=True)
     overall=velocity(all_points,now.timestamp(),window)
     overall['alert']=overall['level'] in ('warning','critical') or any(v['level'] in ('warning','critical') for v in consumers)
@@ -153,6 +170,7 @@ def codex_local(home=None):
     # Journal ownership is not proof of which subscription paid for each turn.
     # Tokens/history deliberately remain profile-wide and are labelled as such in UI.
     return dict(tokens=totals,observed=observed,sessions=sessions,checked_at=time.time(),
-                session_scope='account' if current_account else 'profile', excluded_sessions=excluded_sessions,
+                session_scope='live_and_account_history' if current_account else 'profile', excluded_sessions=excluded_sessions,
+                recent_other_account_sessions=recent_other_sessions,
                 account_fingerprint=current_account, token_scope='profile',
                 burn=dict(**overall,leaders=consumers[:10]))
