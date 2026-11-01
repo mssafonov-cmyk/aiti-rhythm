@@ -344,5 +344,18 @@ if((Control 'GraphClaude').StrokeDashArray.Count -ne 2){throw 'Saved series must
 Preview 'rhythm-three-series.png'
 $win.Width=260;Draw;$win.UpdateLayout();Preview 'rhythm-three-series-narrow.png'
 $results+=@{checks='three provider lines and permanent matching legends; cached line dashed;380/260 DIP';passed=$true}
+$data.view.auto_height=$true;$data.view.compact_usage=$true;$script:showDetails=$false;$script:sessionsExpanded=$false
+$data.claude|Add-Member -NotePropertyName sessions -NotePropertyValue @() -Force
+$data.antigravity.sessions=@()
+$data.codex.sessions=@(1..18|ForEach-Object {[pscustomobject]@{id=('00000000-0000-0000-0000-{0:000000000000}' -f $_);provider='Codex';title=('Сессия '+$_);status='working';at=$now-$_;rate=[pscustomobject]@{per_min=120000;ratio=$(if($_ -eq 1){2.5}else{$null});level=$(if($_ -eq 1){'warning'}else{'learning'});window_seconds=900}}})
+$win.Width=380;Draw;$win.UpdateLayout();$collapsed=(Control 'SessionList').Height
+Click (Control 'SessionsToggle');Draw;$win.UpdateLayout();$list=Control 'SessionList'
+if($list.Height -le $collapsed -or $list.Content.Children.Count -ne 18 -or $list.VerticalScrollBarVisibility -ne 'Auto'){throw 'Expanded sessions must grow and retain all scrollable rows'}
+if((Control 'SessionRate').Text -notmatch '120.*ток/мин.*2[.,]5'){throw 'Session rate and multiplier missing'}
+$list.ScrollToEnd();$win.UpdateLayout();if($list.VerticalOffset -le 0){throw 'Expanded overflow cannot scroll to final sessions'}
+$list.ScrollToHome();$win.UpdateLayout();Preview 'rhythm-sessions-expanded.png'
+$win.Width=260;Draw;$win.UpdateLayout();Preview 'rhythm-sessions-expanded-narrow.png'
+Click (Control 'SessionsToggle');Draw;$win.UpdateLayout();if((Control 'SessionList').Height -ge $list.Height -or (Control 'SessionRate')){throw 'Session collapse must restore compact rows'}
+$results+=@{checks='18 sessions expand/collapse;scroll to last row;visible rate and ratio;380/260 DIP';passed=$true}
 $results|ConvertTo-Json|Set-Content -LiteralPath (Join-Path $root 'widget-test.json') -Encoding UTF8
 $script:closing=$true;$win.Close()

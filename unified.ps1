@@ -2,6 +2,7 @@
 $script:showCompleted=$true
 $script:signalKey=''
 $script:showDetails=$false
+$script:sessionsExpanded=$false
 $script:cardSignals=@{}
 $script:agyQuotaGroup='gemini'
 . (Join-Path $assetRoot 'usage-history.ps1')
@@ -264,7 +265,8 @@ function DrawUnified{
  $usageHeight=if($usageVisible){UsageHeight $compactUsage $hot}else{0}
  $resourceHeight=if($limitsVisible -or $usageVisible){26+$quotaHeight+$usageHeight+$(if($usageHeight -gt 0){10}else{0})}else{0}
  $rows=@();foreach($source in @($data.codex,$data.claude,$data.antigravity)){if(Fresh $source 180){$rows+=@($source.sessions|Where-Object {$null -ne $_ -and ($showCompleted -or $_.status -ne 'idle')})}}
- $naturalSessions=if($sessionsVisible){$(if($automatic){50+31*[Math]::Min(4,[Math]::Max(1,$rows.Count))}else{134})}else{0}
+ $sessionRowHeight=if($sessionsExpanded){47}else{31};$sessionRows=if($sessionsExpanded){[Math]::Min(12,[Math]::Max(1,$rows.Count))}else{[Math]::Min(4,[Math]::Max(1,$rows.Count))}
+ $naturalSessions=if($sessionsVisible){$(if($sessionsExpanded){[Math]::Min(50+$sessionRowHeight*$sessionRows,[Math]::Max(250,[Windows.SystemParameters]::WorkArea.Height*0.55))}elseif($automatic){50+31*$sessionRows}else{134})}else{0}
  $cards=([int]$calendarVisible)+([int]$sessionsVisible)+([int]($resourceHeight -gt 0));$cardGaps=[Math]::Max(0,($cards-1)*10)
  $minimum=$meetingHeight+$naturalSessions+$resourceHeight+$cardGaps
  if($automatic){
@@ -309,17 +311,24 @@ function DrawUnified{
  $active=@($all|Where-Object status -ne 'idle'|Sort-Object @{Expression={if($_.status -eq 'waiting'){0}elseif($_.status -eq 'working'){1}else{2}}},@{Expression='at';Descending=$true});$completed=@($all|Where-Object status -eq 'idle'|Sort-Object at -Descending)
  $waiting=@($active|Where-Object status -eq 'waiting').Count;$working=@($active|Where-Object status -eq 'working').Count
  CardHeading $c 'СЕССИИ' ([string]$waiting+' ждёт вас · '+$working+' работает')
+ $c.Children[1].Width=[Math]::Max(50,$c.Children[1].Width-25)
+ $expand=FlatButton $(if($sessionsExpanded){'⌃'}else{'⌄'}) 24 {$script:sessionsExpanded=-not $sessionsExpanded;Draw;SaveState};$expand.Name='SessionsToggle';$expand.Height=19;$expand.ToolTip=$(if($sessionsExpanded){'Свернуть список сессий'}else{'Развернуть список сессий и показать расход каждой'});Put $c $expand ($w-24) -3
  if($data.codex.session_scope -eq 'live_and_account_history'){$c.Children[0].ToolTip='Codex: активные и недавние сессии (30 мин) всех аккаунтов; более старая история — текущего аккаунта. «Работает» определяется по событиям выполнения, а не по числу открытых окон.'}
- $scroll=[Windows.Controls.ScrollViewer]::new();$scroll.Name='SessionList';$scroll.Width=$w;$scroll.Height=[Math]::Max(28,$c.Height-24);$scroll.VerticalScrollBarVisibility='Hidden';$scroll.HorizontalScrollBarVisibility='Disabled';$stack=[Windows.Controls.StackPanel]::new();$scroll.Content=$stack;Put $c $scroll 0 24;$script:sessionScroll=$scroll
+ $scroll=[Windows.Controls.ScrollViewer]::new();$scroll.Name='SessionList';$scroll.Width=$w;$scroll.Height=[Math]::Max(28,$c.Height-24);$scroll.VerticalScrollBarVisibility='Auto';$scroll.HorizontalScrollBarVisibility='Disabled';$stack=[Windows.Controls.StackPanel]::new();$scroll.Content=$stack;Put $c $scroll 0 24;$script:sessionScroll=$scroll
  $display=@($active);if($showCompleted){$display+=@($completed)}
  foreach($session in $display){
-  $row=FlatButton '' $w {param($s,$e) OpenSession $s.Tag};$row.Name='SessionRow';$row.Tag=$session;$row.Height=31;$row.Padding='0'
-  $grid=[Windows.Controls.Grid]::new();$grid.Width=$w;$left=[Windows.Controls.ColumnDefinition]::new();$right=[Windows.Controls.ColumnDefinition]::new();$right.Width=[Windows.GridLength]::new(88);[void]$grid.ColumnDefinitions.Add($left);[void]$grid.ColumnDefinitions.Add($right)
-  $line=[Windows.Controls.StackPanel]::new();$line.Orientation='Horizontal';$line.VerticalAlignment='Center';[void]$line.Children.Add((StatusGlyph $session.status));$name=if($session.title){$session.title}else{$session.project};$badge=Label $(switch($session.provider){'Antigravity'{'A'}'Claude'{'Cl'}default{'C'}}) 9 (ProviderColor $session.provider);$badge.Width=19;[void]$line.Children.Add($badge);$title=Label $name 11 '#E5E8EB';$title.Width=[Math]::Max(25,$w-129);[void]$line.Children.Add($title);[void]$grid.Children.Add($line)
+  $rowWidth=$w-18;$row=FlatButton '' $rowWidth {param($s,$e) OpenSession $s.Tag};$row.Name='SessionRow';$row.Tag=$session;$row.Height=$sessionRowHeight;$row.Padding='0'
+  $grid=[Windows.Controls.Grid]::new();$grid.Width=$rowWidth;$left=[Windows.Controls.ColumnDefinition]::new();$right=[Windows.Controls.ColumnDefinition]::new();$right.Width=[Windows.GridLength]::new(88);[void]$grid.ColumnDefinitions.Add($left);[void]$grid.ColumnDefinitions.Add($right)
+  $line=[Windows.Controls.StackPanel]::new();$line.Orientation='Horizontal';$line.VerticalAlignment='Center';[void]$line.Children.Add((StatusGlyph $session.status));$name=if($session.title){$session.title}else{$session.project};$badge=Label $(switch($session.provider){'Antigravity'{'A'}'Claude'{'Cl'}default{'C'}}) 9 (ProviderColor $session.provider);$badge.Width=19;[void]$line.Children.Add($badge);$title=Label $name 11 '#E5E8EB';$title.Width=[Math]::Max(25,$rowWidth-129);[void]$line.Children.Add($title);[void]$grid.Children.Add($line)
   $status=switch($session.status){'waiting'{'ждёт вас'}'working'{'работает'}'idle'{'завершена'}default{'неизвестно'}};$color=switch($session.status){'waiting'{'#76B6EF'}'working'{'#99ADA9'}'idle'{'#E6B66B'}default{'#939DA7'}}
   if($session.rate.level -in @('warning','critical')){$status='↑ расход ×'+$session.rate.ratio;$color='#E6B66B'}
   $state=Label $status 10 $color;$state.VerticalAlignment='Center';$state.TextAlignment='Right';[Windows.Controls.Grid]::SetColumn($state,1);[void]$grid.Children.Add($state);$row.Content=$grid;$row.ToolTip=$session.provider+' · '+$name
-  $row.IsEnabled=$session.id -match '^[0-9a-f-]{36}$';[void]$stack.Children.Add($row)
+  if($sessionsExpanded){
+  $row.Content=$null;$content=[Windows.Controls.StackPanel]::new();[void]$content.Children.Add($grid)
+  $metric=$session.rate;$metricText=if($null -eq $metric.per_min){'Скорость: нет данных'}else{(TokenAmount $metric.per_min)+' ток/мин · '+$(if($null -ne $metric.ratio){'×'+$metric.ratio+' к обычному'}elseif($metric.per_min -eq 0){'нет расхода в окне'}else{'мало истории для сравнения'})}
+  $detail=Label $metricText 9 $(if($metric.level -in @('warning','critical')){'#E6B66B'}else{'#939DA7'});$detail.Name='SessionRate';$detail.Width=$rowWidth;$detail.ToolTip=$metricText+' · окно '+$(if($metric.window_seconds){[int]($metric.window_seconds/60)}else{15})+' мин. Токены включают кэш; это не стоимость.';[void]$content.Children.Add($detail);$row.Content=$content
+ }
+ $row.IsEnabled=$session.id -match '^[0-9a-f-]{36}$';[void]$stack.Children.Add($row)
  }
  if(-not $display.Count){[void]$stack.Children.Add((Label $(if($stale){'Список сессий устарел'}else{'Нет активных сессий'}) 12 '#939DA7'))};$scroll.ScrollToVerticalOffset($offset)
  }
